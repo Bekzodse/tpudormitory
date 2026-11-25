@@ -62,6 +62,8 @@ export default function App() {
   const [publicDormRooms, setPublicDormRooms] = useState([]);
   const [publicAnnouncements, setPublicAnnouncements] = useState([]);
   const [publicGallery, setPublicGallery] = useState(galleryItems);
+  const [publicHomepage, setPublicHomepage] = useState(null);
+  const [publicFaqs, setPublicFaqs] = useState(faqs);
 
   // Contact Form State
   const [contactForm, setContactForm] = useState({
@@ -110,6 +112,8 @@ export default function App() {
         if (Array.isArray(data?.dormRooms)) setPublicDormRooms(data.dormRooms);
         if (Array.isArray(data?.announcements)) setPublicAnnouncements(data.announcements);
         if (Array.isArray(data?.gallery) && data.gallery.length > 0) setPublicGallery(data.gallery);
+        if (data?.homepage) setPublicHomepage(data.homepage);
+        if (Array.isArray(data?.faqs) && data.faqs.length > 0) setPublicFaqs(data.faqs);
       })
       .catch(() => {});
   };
@@ -356,7 +360,7 @@ export default function App() {
           />
         ) : activeView === "faq" ? (
           <FaqPage
-            faqs={faqs}
+            faqs={publicFaqs}
             faqOpenIndex={faqOpenIndex}
             setFaqOpenIndex={setFaqOpenIndex}
             openBooking={openBookingModal}
@@ -372,6 +376,7 @@ export default function App() {
         ) : (
           <HomePage
             rooms={rooms}
+            homepage={publicHomepage}
             openBookingModal={openBookingModal}
             navigateTo={navigateTo}
             heroSearchType={heroSearchType}
@@ -417,7 +422,11 @@ export default function App() {
       {lightboxImage && (
         <LightboxModal
           item={lightboxImage}
-          items={String(lightboxImage.id).startsWith("hero-") ? heroCampusPhotos : filteredGallery}
+          items={
+            String(lightboxImage.id).startsWith("hero-")
+              ? (publicHomepage?.heroPhotos || heroCampusPhotos)
+              : filteredGallery
+          }
           onClose={() => setLightboxImage(null)}
           onSelect={setLightboxImage}
         />

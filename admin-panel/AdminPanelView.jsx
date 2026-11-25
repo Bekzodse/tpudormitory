@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays, CreditCard, DoorOpen, Download,
-  LayoutDashboard, Megaphone, Plus, Users, Wrench
+  Globe, LayoutDashboard, Megaphone, Plus, Users, Wrench
 } from "lucide-react";
 import DashboardView from "../dashboard/DashboardView";
 import AdminSidebar from "./AdminSidebar";
@@ -12,6 +12,7 @@ import AdminResidentsSection from "./sections/AdminResidentsSection";
 import AdminPaymentsSection from "./sections/AdminPaymentsSection";
 import AdminMaintenanceSection from "./sections/AdminMaintenanceSection";
 import AdminCommunitySection from "./sections/AdminCommunitySection";
+import AdminSiteContentSection from "./sections/AdminSiteContentSection";
 import AdminModals from "./modals/AdminModals";
 
 export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) {
@@ -24,7 +25,7 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
   const [overview, setOverview] = useState({
     rooms: [], bookings: [], students: [], messages: [],
     dormRooms: [], residents: [], maintenance: [], announcements: [],
-    gallery: [], availableImages: []
+    gallery: [], availableImages: [], homepage: null, faqs: []
   });
   const [roomEdits, setRoomEdits] = useState({});
 
@@ -87,7 +88,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
         rooms: data.rooms || [], bookings: data.bookings || [], students: data.students || [],
         messages: data.messages || [], dormRooms: data.dormRooms || [], residents: data.residents || [],
         maintenance: data.maintenance || [], announcements: data.announcements || [],
-        gallery: data.gallery || [], availableImages: data.availableImages || []
+        gallery: data.gallery || [], availableImages: data.availableImages || [],
+        homepage: data.homepage || null, faqs: data.faqs || []
       });
       const edits = {};
       (data.rooms || []).forEach((r) => {
@@ -314,7 +316,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     { id: "residents", label: "Yashovchi talabalar", icon: Users, badge: overview.residents.length },
     { id: "payments", label: "To‘lovlar va moliya", icon: CreditCard, badge: totals.overduePayCount || null, tone: totals.overduePayCount ? "is-alert" : "" },
     { id: "maintenance", label: "Texnik xizmat", icon: Wrench, badge: totals.openMaintCount || null, tone: totals.openMaintCount ? "is-warn" : "" },
-    { id: "announcements", label: "E’lonlar va Xabarlar", icon: Megaphone, badge: overview.announcements.length + overview.messages.length }
+    { id: "announcements", label: "E’lonlar va Xabarlar", icon: Megaphone, badge: overview.announcements.length + overview.messages.length },
+    { id: "siteContent", label: "Bosh sahifa & FAQ", icon: Globe, badge: (overview.faqs || []).length || null }
   ];
 
   const sectionMeta = {
@@ -324,7 +327,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     residents: { title: "Yashovchi Talabalar Reestri", subtitle: "Barcha talabalarni qidirish, ma’lumotlarini tahrirlash, boshqa xonaga ko‘chirish va Excel (CSV) yuklash." },
     payments: { title: "Oylik To‘lovlar va Moliya Nazorati", subtitle: "Yotoqxona tushum rejasini kuzating, to‘lovlarni tasdiqlang va qarzdorlarga eslatma yuboring." },
     maintenance: { title: "Texnik Xizmat va Ta’mirlash", subtitle: "Xonalardagi santexnika, elektr, konditsioner va Wi-Fi nosozliklarini qayd eting va hal qiling." },
-    announcements: { title: "E’lonlar, Portal Akkauntlari va Xabarlar", subtitle: "Talabalar kabinetiga muhim e’lonlar joylang hamda saytdan kelgan murojaatlarni ko‘ring." }
+    announcements: { title: "E’lonlar, Portal Akkauntlari va Xabarlar", subtitle: "Talabalar kabinetiga muhim e’lonlar joylang hamda saytdan kelgan murojaatlarni ko‘ring." },
+    siteContent: { title: "Bosh Sahifa Matnlari, Rasmlari va Savol-Javoblar", subtitle: "Bosh sahifadagi sarlavhalar, 4 ta Hero rasmi hamda Savol-Javob (FAQ) bo‘limini to‘liq boshqaring." }
   };
 
   return (
@@ -409,6 +413,7 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
           {section === "payments" && <AdminPaymentsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onEditResident={openEditResidentModal} showToast={showToast} />}
           {section === "maintenance" && <AdminMaintenanceSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} />}
           {section === "announcements" && <AdminCommunitySection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} onEditAccount={openEditAccountModal} onNewAccount={openNewAccountModal} onEditAnnouncement={openEditAnnouncementModal} showToast={showToast} />}
+          {section === "siteContent" && <AdminSiteContentSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} showToast={showToast} />}
         </main>
       </div>
 

@@ -5501,6 +5501,49 @@ img {
   color: var(--color-muted);
 }
 
+/* Admin Site Content (Homepage Hero & FAQ Manager) */
+.admin-site-content-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.admin-stats-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-stat-edit-box {
+  padding: 12px;
+  border-radius: 14px;
+  background: #f4f8ff;
+  border: 1px solid #d7e6fc;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-hero-photos-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-hero-photo-card {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1.5px solid #dce9fc;
+  background: #f8fbff;
+}
+
+@media (max-width: 960px) {
+  .admin-stats-edit-grid,
+  .admin-hero-photos-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Database Inspector View */
 .admin-db-tables-bar {
   display: flex;

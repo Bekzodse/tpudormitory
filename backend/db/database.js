@@ -127,6 +127,25 @@ db.exec(`
     tag TEXT NOT NULL DEFAULT 'Yotoqxona',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS homepage_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    eyebrow_badge TEXT NOT NULL,
+    eyebrow_status TEXT NOT NULL,
+    title_prefix TEXT NOT NULL,
+    title_highlight TEXT NOT NULL,
+    title_suffix TEXT NOT NULL,
+    lead_text TEXT NOT NULL,
+    stats_json TEXT NOT NULL,
+    hero_photos_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS faq_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 const accountCols = db.prepare("PRAGMA table_info(accounts)").all().map((c) => c.name);
@@ -309,6 +328,75 @@ function seedDefaults() {
     for (const g of defaultGallery) insGallery.run(...g);
   }
 
+  if (!db.prepare("SELECT id FROM homepage_settings WHERE id = 1").get()) {
+    const defaultStats = [
+      { value: "500+", label: "Talaba sig‘imi" },
+      { value: "24/7", label: "Face ID xavfsizlik" },
+      { value: "3 min", label: "Universitetgacha" },
+      { value: "100%", label: "Kommunal ichida" }
+    ];
+    const defaultHeroPhotos = [
+      { id: "hero-2", title: "TPU Yotoqxona Asosiy Fasadi", image: "/images/campus-2.jpg", tag: "Bosh korpus" },
+      { id: "hero-1", title: "Yotoqxona Kirish Qismi", image: "/images/campus-1.jpg", tag: "Kirish maydoni" },
+      { id: "hero-3", title: "Kampus Xiyoboni va Yotoqxona", image: "/images/campus-3.jpg", tag: "Kampus" },
+      { id: "hero-4", title: "Yotoqxona Hovlisi va Korpus", image: "/images/campus-4.jpg", tag: "Hovli" }
+    ];
+    db.prepare(`
+      INSERT INTO homepage_settings (
+        id, eyebrow_badge, eyebrow_status, title_prefix, title_highlight, title_suffix,
+        lead_text, stats_json, hero_photos_json
+      )
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "TPU SMART ACCOMMODATION",
+      "Qabul davom etmoqda",
+      "Talabalar uchun yangi avlod",
+      "aqlli va qulay",
+      "yotoqxonasi",
+      "Tashkent Perfect University talabalari uchun yaratilgan xavfsiz, zamonaviy va hamyonbop turar joy. Barcha kommunal to‘lovlar, 500 Mbit/s Wi-Fi, 24/7 Face ID xavfsizlik va sokin o‘qish zallari siz uchun muhayyo.",
+      JSON.stringify(defaultStats),
+      JSON.stringify(defaultHeroPhotos)
+    );
+  }
+
+  if ((db.prepare("SELECT COUNT(*) AS cnt FROM faq_items").get()?.cnt || 0) === 0) {
+    const insFaq = db.prepare(`
+      INSERT INTO faq_items (question, answer, sort_order)
+      VALUES (?, ?, ?)
+    `);
+    const defaultFaqs = [
+      [
+        "Kommunal to‘lovlar (elektr, suv, isitish, Wi-Fi) oylik to‘lov ichidami?",
+        "Ha, 100%! Barcha kommunal to‘lovlar (sovuq va issiq suv, elektr energiyasi, markaziy isitish, kunlik umumiy tozalash va 500 Mbit/s optik Wi-Fi internet) oylik to‘lov ichiga kiritilgan. Hech qanday yashirin yoki kutilmagan to‘lovlar yo‘q."
+      ],
+      [
+        "Yotoqxonaga kirish-chiqish vaqti cheklanganmi?",
+        "Yotoqxona 24/7 Smart Face-ID tizimi bilan jihozlangan. Talabalar xavfsizligi va sokin o‘qish muhitini ta’minlash maqsadida kechki soat 23:00 dan 06:00 gacha sokinlik tartibi amal qiladi. Kechki dars yoki ishda bo‘lgan talabalar oldindan xabar berib ruxsatnoma bilan kirishlari mumkin."
+      ],
+      [
+        "Xonadoshni o‘zim tanlashim mumkinmi?",
+        "Albatta! Birgalikda ariza topshirgan do‘stlar, kursdoshlar yoki bir fakultet talabalari bir xonaga joylashtiriladi. Onlayn arizangizdagi 'Qo‘shimcha istaklar' maydoniga do‘stingizning ism-familiyasini kiritishingiz kifoya."
+      ],
+      [
+        "Ota-onalar yoki yaqinlar yotoqxonaga mehmonga kela oladimi?",
+        "Ha, har kuni soat 09:00 dan 20:00 gacha ota-onalar va yaqinlar maxsus qabulxona (reception) va 1-qavatdagi umumiy dam olish zalida talabalar bilan uchrashishlari mumkin. Xavfsizlik yuzasidan mehmonlar shaxsini tasdiqlovchi hujjat bilan ro‘yxatga olinadi."
+      ],
+      [
+        "Kir yuvish va dazmollash uchun alohida pul to‘lanadimi?",
+        "Yo‘q! Har bir qavatdagi zamonaviy kir yuvish va quritish xonalari hamda dazmollash stollari barcha yashovchi talabalar uchun mutlaqo bepul taqdim etiladi."
+      ],
+      [
+        "To‘lov tartibi qanday amalga oshiriladi?",
+        "To‘lovlarni oylik, semestrlik yoki yillik tarzda Payme, Click, Uzum Bank yoki bank rekvizitlari orqali onlayn amalga oshirish mumkin. Bir semestr yoki to‘liq yil uchun oldindan to‘lov qilgan talabalarga maxsus 10% gacha chegirma taqdim etiladi."
+      ],
+      [
+        "Yotoqxonadan universitet o‘quv korpuslarigacha bo‘lgan masofa qancha?",
+        "Yotoqxona bevosita universitet talabalar shaharchasida (kampus ichida) joylashgan bo‘lib, asosiy o‘quv korpuslarigacha piyoda bor-yo‘g‘i 3-5 daqiqalik yo‘l."
+      ]
+    ];
+    defaultFaqs.forEach(([q, a], idx) => insFaq.run(q, a, idx + 1));
+  }
+
   if ((db.prepare("SELECT COUNT(*) AS cnt FROM dorm_announcements").get()?.cnt || 0) === 0) {
     const insAnn = db.prepare(`
       INSERT INTO dorm_announcements (title, category, content, audience, pinned)
@@ -480,6 +568,44 @@ export function getGalleryPhotos() {
     image: g.image,
     tag: g.tag,
     createdAt: g.created_at
+  }));
+}
+
+export function getHomepageSettings() {
+  const row = db.prepare("SELECT * FROM homepage_settings WHERE id = 1").get();
+  if (!row) return null;
+  const stats = parseJsonArray(row.stats_json, [
+    { value: "500+", label: "Talaba sig‘imi" },
+    { value: "24/7", label: "Face ID xavfsizlik" },
+    { value: "3 min", label: "Universitetgacha" },
+    { value: "100%", label: "Kommunal ichida" }
+  ]);
+  const heroPhotos = parseJsonArray(row.hero_photos_json, [
+    { id: "hero-2", title: "TPU Yotoqxona Asosiy Fasadi", image: "/images/campus-2.jpg", tag: "Bosh korpus" },
+    { id: "hero-1", title: "Yotoqxona Kirish Qismi", image: "/images/campus-1.jpg", tag: "Kirish maydoni" },
+    { id: "hero-3", title: "Kampus Xiyoboni va Yotoqxona", image: "/images/campus-3.jpg", tag: "Kampus" },
+    { id: "hero-4", title: "Yotoqxona Hovlisi va Korpus", image: "/images/campus-4.jpg", tag: "Hovli" }
+  ]);
+  return {
+    eyebrowBadge: row.eyebrow_badge,
+    eyebrowStatus: row.eyebrow_status,
+    titlePrefix: row.title_prefix,
+    titleHighlight: row.title_highlight,
+    titleSuffix: row.title_suffix,
+    leadText: row.lead_text,
+    stats,
+    heroPhotos,
+    updatedAt: row.updated_at
+  };
+}
+
+export function getFaqItems() {
+  return db.prepare("SELECT * FROM faq_items ORDER BY sort_order ASC, id ASC").all().map((f) => ({
+    id: f.id,
+    q: f.question,
+    a: f.answer,
+    sortOrder: f.sort_order,
+    createdAt: f.created_at
   }));
 }
 

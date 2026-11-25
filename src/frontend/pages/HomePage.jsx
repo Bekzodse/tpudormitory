@@ -8,6 +8,7 @@ import { heroCampusPhotos } from "../data/dormData";
 
 export default function HomePage({
   rooms = [],
+  homepage,
   openBookingModal,
   navigateTo,
   heroSearchType,
@@ -17,27 +18,46 @@ export default function HomePage({
   setRoomFilter,
   setLightboxImage
 }) {
+  const eyebrowBadge = homepage?.eyebrowBadge || "TPU SMART ACCOMMODATION";
+  const eyebrowStatus = homepage?.eyebrowStatus || "Qabul davom etmoqda";
+  const titlePrefix = homepage?.titlePrefix ?? "Talabalar uchun yangi avlod";
+  const titleHighlight = homepage?.titleHighlight ?? "aqlli va qulay";
+  const titleSuffix = homepage?.titleSuffix ?? "yotoqxonasi";
+  const leadText =
+    homepage?.leadText ||
+    "Tashkent Perfect University talabalari uchun yaratilgan xavfsiz, zamonaviy va hamyonbop turar joy. Barcha kommunal to‘lovlar, 500 Mbit/s Wi-Fi, 24/7 Face ID xavfsizlik va sokin o‘qish zallari siz uchun muhayyo.";
+  const stats =
+    Array.isArray(homepage?.stats) && homepage.stats.length > 0
+      ? homepage.stats
+      : [
+          { value: "500+", label: "Talaba sig‘imi" },
+          { value: "24/7", label: "Face ID xavfsizlik" },
+          { value: "3 min", label: "Universitetgacha" },
+          { value: "100%", label: "Kommunal ichida" }
+        ];
+  const collagePhotos =
+    Array.isArray(homepage?.heroPhotos) && homepage.heroPhotos.length > 0
+      ? homepage.heroPhotos
+      : heroCampusPhotos;
+
   return (
     <>
       <section className="hero" id="home">
         <div className="hero-copy">
           <div className="hero-eyebrow">
             <span className="eyebrow-badge">
-              <Sparkles size={14} /> TPU SMART ACCOMMODATION
+              <Sparkles size={14} /> {eyebrowBadge}
             </span>
             <span className="eyebrow-status">
-              <span className="status-dot" /> Qabul davom etmoqda
+              <span className="status-dot" /> {eyebrowStatus}
             </span>
           </div>
 
           <h1 className="hero-title">
-            Talabalar uchun yangi avlod <span className="text-gradient-blue">aqlli va qulay</span> yotoqxonasi
+            {titlePrefix} <span className="text-gradient-blue">{titleHighlight}</span> {titleSuffix}
           </h1>
 
-          <p className="hero-lead">
-            Tashkent Perfect University talabalari uchun yaratilgan xavfsiz, zamonaviy va hamyonbop turar joy.
-            Barcha kommunal to‘lovlar, 500 Mbit/s Wi-Fi, 24/7 Face ID xavfsizlik va sokin o‘qish zallari siz uchun muhayyo.
-          </p>
+          <p className="hero-lead">{leadText}</p>
 
           <div className="hero-actions">
             <button
@@ -130,29 +150,19 @@ export default function HomePage({
           </div>
 
           <div className="hero-stats">
-            <div className="hero-stat-item">
-              <strong>500+</strong>
-              <small>Talaba sig‘imi</small>
-            </div>
-            <div className="hero-stat-item">
-              <strong>24/7</strong>
-              <small>Face ID xavfsizlik</small>
-            </div>
-            <div className="hero-stat-item">
-              <strong>3 min</strong>
-              <small>Universitetgacha</small>
-            </div>
-            <div className="hero-stat-item">
-              <strong>100%</strong>
-              <small>Kommunal ichida</small>
-            </div>
+            {stats.map((st, idx) => (
+              <div className="hero-stat-item" key={idx}>
+                <strong>{st.value}</strong>
+                <small>{st.label}</small>
+              </div>
+            ))}
           </div>
         </div>
 
         <div className="hero-visual">
           <div className="hero-collage-frame">
             <div className="hero-collage-row-top">
-              {heroCampusPhotos.slice(0, 2).map((photo) => (
+              {collagePhotos.slice(0, 2).map((photo) => (
                 <button
                   key={photo.id}
                   type="button"
@@ -166,7 +176,7 @@ export default function HomePage({
             </div>
 
             <div className="hero-collage-row-bottom">
-              {heroCampusPhotos.slice(2, 4).map((photo) => (
+              {collagePhotos.slice(2, 4).map((photo) => (
                 <button
                   key={photo.id}
                   type="button"

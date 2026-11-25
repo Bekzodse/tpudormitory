@@ -8,7 +8,9 @@ import {
   getAdminResidents,
   getAnnouncements,
   getAvailableImages,
+  getFaqItems,
   getGalleryPhotos,
+  getHomepageSettings,
   parsePriceDigits,
   saveUploadedImage
 } from "../db/database.js";
@@ -92,7 +94,109 @@ router.get("/overview", (_request, response) => {
     maintenance: getAdminMaintenance(),
     announcements: getAnnouncements(),
     gallery: getGalleryPhotos(),
-    availableImages: getAvailableImages()
+    availableImages: getAvailableImages(),
+    homepage: getHomepageSettings(),
+    faqs: getFaqItems()
+  });
+});
+
+router.put("/homepage", (request, response) => {
+  const current = getHomepageSettings();
+  const {
+    eyebrowBadge,
+    eyebrowStatus,
+    titlePrefix,
+    titleHighlight,
+    titleSuffix,
+    leadText,
+    stats,
+    heroPhotos
+  } = request.body;
+
+  const nextBadge = String(eyebrowBadge ?? current.eyebrowBadge).trim() || current.eyebrowBadge;
+  const nextStatus = String(eyebrowStatus ?? current.eyebrowStatus).trim() || current.eyebrowStatus;
+  const nextPrefix = String(titlePrefix ?? current.titlePrefix).trim();
+  const nextHighlight = String(titleHighlight ?? current.titleHighlight).trim();
+  const nextSuffix = String(titleSuffix ?? current.titleSuffix).trim();
+  const nextLead = String(leadText ?? current.leadText).trim() || current.leadText;
+
+  const nextStats = Array.isArray(stats) && stats.length > 0
+    ? stats.map((st) => ({
+        value: String(st.value || "").trim() || "—",
+        label: String(st.label || "").trim() || "Ko‘rsatkich"
+      }))
+    : current.stats;
+
+  const nextPhotos = Array.isArray(heroPhotos) && heroPhotos.length > 0
+    ? heroPhotos.map((ph, idx) => ({
+        id: ph.id || `hero-${idx + 1}`,
+        title: String(ph.title || `Kampus rasmi ${idx + 1}`).trim(),
+        tag: String(ph.tag || "Kampus").trim(),
+        image: saveUploadedImage(ph.image, `hero-${idx + 1}`) || current.heroPhotos[idx]?.image || "/images/campus-2.jpg"
+      }))
+    : current.heroPhotos;
+
+  db.prepare(`
+    UPDATE homepage_settings
+    SET eyebrow_badge = ?, eyebrow_status = ?, title_prefix = ?, title_highlight = ?, title_suffix = ?,
+        lead_text = ?, stats_json = ?, hero_photos_json = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = 1
+  `).run(
+    nextBadge,
+    nextStatus,
+    nextPrefix,
+    nextHighlight,
+    nextSuffix,
+    nextLead,
+    JSON.stringify(nextStats),
+    JSON.stringify(nextPhotos)
+  );
+
+  return response.json({
+    homepage: getHomepageSettings(),
+    availableImages: getAvailableImages(),
+    message: "Bosh sahifa matnlari va rasmlari yangilandi!"
+  });
+});
+
+router.post("/faqs", (request, response) => {
+  const { q, a } = request.body;
+  const cleanQ = String(q || "").trim();
+  const cleanA = String(a || "").trim();
+  if (!cleanQ || !cleanA) {
+    return response.status(400).json({ message: "Savol va javob matnini to‘liq kiriting." });
+  }
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS max_ord FROM faq_items").get()?.max_ord || 0;
+  db.prepare("INSERT INTO faq_items (question, answer, sort_order) VALUES (?, ?, ?)").run(cleanQ, cleanA, maxOrder + 1);
+  return response.status(201).json({
+    faqs: getFaqItems(),
+    message: "Yangi savol-javob qo‘shildi!"
+  });
+});
+
+router.patch("/faqs/:id", (request, response) => {
+  const faqId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM faq_items WHERE id = ?").get(faqId);
+  if (!existing) return response.status(404).json({ message: "Savol-javob topilmadi." });
+
+  const cleanQ = request.body.q !== undefined ? String(request.body.q).trim() : existing.question;
+  const cleanA = request.body.a !== undefined ? String(request.body.a).trim() : existing.answer;
+  if (!cleanQ || !cleanA) {
+    return response.status(400).json({ message: "Savol va javob bo‘sh bo‘lmasligi kerak." });
+  }
+  db.prepare("UPDATE faq_items SET question = ?, answer = ? WHERE id = ?").run(cleanQ, cleanA, faqId);
+  return response.json({
+    faqs: getFaqItems(),
+    message: "Savol-javob yangilandi!"
+  });
+});
+
+router.delete("/faqs/:id", (request, response) => {
+  const res = db.prepare("DELETE FROM faq_items WHERE id = ?").run(Number(request.params.id));
+  if (!res.changes) return response.status(404).json({ message: "Savol-javob topilmadi." });
+  return response.json({
+    faqs: getFaqItems(),
+    message: "Savol-javob o‘chirildi."
   });
 });
 

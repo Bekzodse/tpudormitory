@@ -4,7 +4,9 @@ import {
   formatRoomInventory,
   getAnnouncements,
   getAvailableImages,
+  getFaqItems,
   getGalleryPhotos,
+  getHomepageSettings,
   getPublicDormRooms,
   getStudentPortalData
 } from "../db/database.js";
@@ -19,8 +21,18 @@ router.get("/rooms", (_request, response) => {
     dormRooms: getPublicDormRooms(),
     announcements: getAnnouncements(),
     gallery: getGalleryPhotos(),
-    availableImages: getAvailableImages()
+    availableImages: getAvailableImages(),
+    homepage: getHomepageSettings(),
+    faqs: getFaqItems()
   });
+});
+
+router.get("/faqs", (_request, response) => {
+  return response.json({ faqs: getFaqItems() });
+});
+
+router.get("/homepage", (_request, response) => {
+  return response.json({ homepage: getHomepageSettings() });
 });
 
 router.get("/gallery", (_request, response) => {
