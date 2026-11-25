@@ -1,11 +1,6 @@
 node_modules
-dist
 .DS_Store
 *.local
-server/data/auth.sqlite
-server/data/auth.sqlite-shm
-server/data/auth.sqlite-wal
-backend/data/auth.sqlite
-backend/data/auth.sqlite-shm
-backend/data/auth.sqlite-wal
+*.sqlite-shm
+*.sqlite-wal
 .env
