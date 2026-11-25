@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, X } from "lucide-react";
+import { CalendarDays, CheckCircle2, MessageSquare, X } from "lucide-react";
 import AdminPanelView from "./admin-panel/AdminPanelView";
 import Header from "./frontend/components/Header";
 import Footer from "./frontend/components/Footer";
@@ -11,6 +11,7 @@ import ComparisonPage from "./frontend/pages/ComparisonPage";
 import FaqPage from "./frontend/pages/FaqPage";
 import ContactPage from "./frontend/pages/ContactPage";
 import BookingModal from "./frontend/modals/BookingModal";
+import SupportChatModal from "./frontend/modals/SupportChatModal";
 import { LightboxModal, RoomDetailsModal } from "./frontend/modals/DormModals";
 import { AuthModal, ProfileModal } from "./frontend/modals/AuthModals";
 import {
@@ -80,7 +81,26 @@ export default function App() {
   const [student, setStudent] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [supportChatOpen, setSupportChatOpen] = useState(false);
+  const [chatSession, setChatSession] = useState(() => {
+    try {
+      const saved = window.localStorage?.getItem("tpu_support_chat_session");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [toastMessage, setToastMessage] = useState("");
+
+  const updateChatSession = (next) => {
+    setChatSession(next);
+    try {
+      if (next) window.localStorage?.setItem("tpu_support_chat_session", JSON.stringify(next));
+      else window.localStorage?.removeItem("tpu_support_chat_session");
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -191,8 +211,18 @@ export default function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Ariza yuborishda xatolik yuz berdi.");
       setBookingSubmitted(true);
+      if (data.chat || data.booking) {
+        updateChatSession({
+          threadKey: data.chat?.threadKey || `booking-${data.booking?.id}`,
+          bookingId: data.booking?.id,
+          studentName: bookingForm.name,
+          phone: bookingForm.phone,
+          course: bookingForm.course,
+          roomTitle: bookingForm.room
+        });
+      }
       loadPublicBackendData();
-      showToast("Arizangiz bazaga muvaffaqiyatli saqlandi!");
+      showToast("Arizangiz saqlandi! Endi Support Chat orqali admin bilan bog‘lanishingiz mumkin.");
     } catch (err) {
       setBookingError(err.message);
     } finally {
@@ -399,7 +429,16 @@ export default function App() {
         />
       )}
 
-      <div className="floating-action-buttons">
+      <div className="floating-action-buttons" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <button
+          className="fab-book btn btn-secondary"
+          onClick={() => setSupportChatOpen(true)}
+          aria-label="Admin bilan Support Chat"
+          title="Admin bilan Support Chat"
+        >
+          <MessageSquare size={18} />
+          <span className="fab-label">Admin bilan chat</span>
+        </button>
         <button
           className="fab-book btn btn-primary btn-glow"
           onClick={() => openBookingModal()}
@@ -443,8 +482,17 @@ export default function App() {
           publicDormRooms={publicDormRooms}
           closeBookingModal={closeBookingModal}
           handleBookingSubmit={handleBookingSubmit}
+          onOpenSupportChat={() => setSupportChatOpen(true)}
         />
       )}
+
+      <SupportChatModal
+        isOpen={supportChatOpen}
+        onClose={() => setSupportChatOpen(false)}
+        student={student}
+        chatSession={chatSession}
+        setChatSession={updateChatSession}
+      />
 
       {authMode && (
         <AuthModal

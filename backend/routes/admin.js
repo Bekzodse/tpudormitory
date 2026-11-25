@@ -6,11 +6,13 @@ import {
   getAdminDormRooms,
   getAdminMaintenance,
   getAdminResidents,
+  getAdminSupportChats,
   getAnnouncements,
   getAvailableImages,
   getFaqItems,
   getGalleryPhotos,
   getHomepageSettings,
+  getOrCreateSupportChat,
   parsePriceDigits,
   saveUploadedImage
 } from "../db/database.js";
@@ -96,8 +98,52 @@ router.get("/overview", (_request, response) => {
     gallery: getGalleryPhotos(),
     availableImages: getAvailableImages(),
     homepage: getHomepageSettings(),
-    faqs: getFaqItems()
+    faqs: getFaqItems(),
+    chats: getAdminSupportChats()
   });
+});
+
+router.get("/chats", (_request, response) => {
+  return response.json({ chats: getAdminSupportChats() });
+});
+
+router.post("/chats/:id/read", (request, response) => {
+  const chatId = Number(request.params.id);
+  db.prepare("UPDATE support_chats SET unread_admin = 0 WHERE id = ?").run(chatId);
+  return response.json({ chats: getAdminSupportChats() });
+});
+
+router.post("/chats/:id/reply", (request, response) => {
+  const chatId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatId);
+  if (!existing) return response.status(404).json({ message: "Chat topilmadi." });
+
+  const cleanMsg = String(request.body.message || "").trim();
+  if (!cleanMsg) return response.status(400).json({ message: "Javob matnini kiriting." });
+
+  db.prepare(`
+    INSERT INTO support_chat_messages (chat_id, sender_role, sender_name, message)
+    VALUES (?, 'admin', 'TPU Ma’muriyati', ?)
+  `).run(chatId, cleanMsg);
+
+  db.prepare(`
+    UPDATE support_chats
+    SET last_message = ?, unread_admin = 0, unread_student = unread_student + 1, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(cleanMsg, chatId);
+
+  return response.status(201).json({
+    chats: getAdminSupportChats(),
+    message: `${existing.student_name} ga javob yuborildi!`
+  });
+});
+
+router.delete("/chats/:id", (request, response) => {
+  const chatId = Number(request.params.id);
+  db.prepare("DELETE FROM support_chat_messages WHERE chat_id = ?").run(chatId);
+  const res = db.prepare("DELETE FROM support_chats WHERE id = ?").run(chatId);
+  if (!res.changes) return response.status(404).json({ message: "Chat topilmadi." });
+  return response.json({ chats: getAdminSupportChats() });
 });
 
 router.put("/homepage", (request, response) => {
@@ -346,12 +392,35 @@ router.patch("/bookings/:id", (request, response) => {
       `).get(bookingId);
     })();
 
+    const chatRow = getOrCreateSupportChat({
+      bookingId: updatedBooking.id,
+      studentAccountId: updatedBooking.student_account_id,
+      studentName: updatedBooking.student_name,
+      phone: updatedBooking.phone,
+      course: updatedBooking.course || "",
+      roomTitle: updatedBooking.room_title,
+      assignedRoomNumber: updatedBooking.assigned_room_number || ""
+    });
+    if (status === "approved") {
+      const autoReply = `Tabriklaymiz, ${updatedBooking.student_name}! Sizning "${updatedBooking.room_title}" bo‘yicha arizangiz tasdiqlandi${updatedBooking.assigned_room_number ? ` va ${updatedBooking.assigned_room_number}-xonaga biriktirildi` : ""}.${adminNote ? ` Ma’muriyat izohi: ${adminNote}` : ""} Savollaringiz bo‘lsa shu chatda yozishingiz mumkin.`;
+      db.prepare(`
+        INSERT INTO support_chat_messages (chat_id, sender_role, sender_name, message)
+        VALUES (?, 'admin', 'TPU Ma’muriyati', ?)
+      `).run(chatRow.id, autoReply);
+      db.prepare(`
+        UPDATE support_chats
+        SET last_message = ?, assigned_room_number = ?, unread_student = unread_student + 1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(autoReply, updatedBooking.assigned_room_number || "", chatRow.id);
+    }
+
     const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
     return response.json({
       booking: updatedBooking,
       rooms,
       dormRooms: getAdminDormRooms(),
-      residents: getAdminResidents()
+      residents: getAdminResidents(),
+      chats: getAdminSupportChats()
     });
   } catch (error) {
     return response.status(error.status || 500).json({ message: error.message || "Xatolik yuz berdi." });

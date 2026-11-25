@@ -146,6 +146,31 @@ db.exec(`
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS support_chats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_key TEXT NOT NULL UNIQUE,
+    student_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    course TEXT,
+    room_title TEXT,
+    assigned_room_number TEXT,
+    booking_id INTEGER,
+    student_account_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'open',
+    unread_admin INTEGER NOT NULL DEFAULT 0,
+    unread_student INTEGER NOT NULL DEFAULT 0,
+    last_message TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS support_chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    sender_role TEXT NOT NULL CHECK (sender_role IN ('student', 'admin')),
+    sender_name TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 const accountCols = db.prepare("PRAGMA table_info(accounts)").all().map((c) => c.name);
@@ -397,6 +422,46 @@ function seedDefaults() {
     defaultFaqs.forEach(([q, a], idx) => insFaq.run(q, a, idx + 1));
   }
 
+  if ((db.prepare("SELECT COUNT(*) AS cnt FROM support_chats").get()?.cnt || 0) === 0) {
+    const insChat = db.prepare(`
+      INSERT INTO support_chats (
+        thread_key, student_name, phone, course, room_title, assigned_room_number,
+        booking_id, student_account_id, status, unread_admin, unread_student, last_message
+      )
+      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, 'open', ?, 0, ?)
+    `);
+    const insMsg = db.prepare(`
+      INSERT INTO support_chat_messages (chat_id, sender_role, sender_name, message)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    const c1 = insChat.run(
+      "phone-998904121105",
+      "Jasur Karimov",
+      "+998 90 412-11-05",
+      "3-kurs",
+      "01 / 2 Kishilik Yotoqxona",
+      "401",
+      1,
+      "Shartnomani qaysi xonadan olsam bo‘ladi?"
+    ).lastInsertRowid;
+    insMsg.run(c1, "student", "Jasur Karimov", "Assalomu alaykum! Arizam qabul qilindi, 401-xonaga joylashish uchun shartnomani qaysi xonadan olsam bo‘ladi?");
+    insMsg.run(c1, "admin", "TPU Ma’muriyati", "Va alaykum assalom, Jasur! 1-qavatdagi yotoqxona ma’muriyati (102-xona) ga pasportingiz bilan kelishingiz mumkin.");
+    insMsg.run(c1, "student", "Jasur Karimov", "Rahmat! Shartnomani qaysi xonadan olsam bo‘ladi va soat nechagacha ochiq?");
+
+    const c2 = insChat.run(
+      "phone-998937711982",
+      "Sardorbek Alimov",
+      "+998 93 771-19-82",
+      "4-kurs",
+      "01 / 2 Kishilik Yotoqxona",
+      "402",
+      1,
+      "Oylik to‘lovni Payme orqali qilsam bo‘ladimi?"
+    ).lastInsertRowid;
+    insMsg.run(c2, "student", "Sardorbek Alimov", "Assalomu alaykum, men 2 kishilik xonaga ariza topshirgan edim. Oylik to‘lovni Payme orqali qilsam bo‘ladimi?");
+  }
+
   if ((db.prepare("SELECT COUNT(*) AS cnt FROM dorm_announcements").get()?.cnt || 0) === 0) {
     const insAnn = db.prepare(`
       INSERT INTO dorm_announcements (title, category, content, audience, pinned)
@@ -607,6 +672,130 @@ export function getFaqItems() {
     sortOrder: f.sort_order,
     createdAt: f.created_at
   }));
+}
+
+export function normalizePhoneKey(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  return digits ? `phone-${digits}` : "";
+}
+
+export function getOrCreateSupportChat({
+  threadKey,
+  studentName = "Talaba",
+  phone = "",
+  course = "",
+  roomTitle = "",
+  assignedRoomNumber = "",
+  bookingId = null,
+  studentAccountId = null
+}) {
+  let chat = null;
+  if (threadKey) {
+    chat = db.prepare("SELECT * FROM support_chats WHERE thread_key = ?").get(String(threadKey));
+  }
+  if (!chat && bookingId) {
+    chat = db.prepare("SELECT * FROM support_chats WHERE booking_id = ?").get(Number(bookingId));
+  }
+  if (!chat && studentAccountId) {
+    chat = db.prepare("SELECT * FROM support_chats WHERE student_account_id = ?").get(Number(studentAccountId));
+  }
+  const phoneKey = normalizePhoneKey(phone);
+  if (!chat && phoneKey) {
+    chat = db.prepare("SELECT * FROM support_chats WHERE thread_key = ?").get(phoneKey);
+  }
+
+  if (chat) {
+    db.prepare(`
+      UPDATE support_chats
+      SET student_name = COALESCE(NULLIF(?, ''), student_name),
+          phone = COALESCE(NULLIF(?, ''), phone),
+          course = COALESCE(NULLIF(?, ''), course),
+          room_title = COALESCE(NULLIF(?, ''), room_title),
+          assigned_room_number = COALESCE(NULLIF(?, ''), assigned_room_number),
+          booking_id = COALESCE(?, booking_id),
+          student_account_id = COALESCE(?, student_account_id)
+      WHERE id = ?
+    `).run(
+      String(studentName || "").trim(),
+      String(phone || "").trim(),
+      String(course || "").trim(),
+      String(roomTitle || "").trim(),
+      String(assignedRoomNumber || "").trim(),
+      bookingId ? Number(bookingId) : null,
+      studentAccountId ? Number(studentAccountId) : null,
+      chat.id
+    );
+    return db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chat.id);
+  }
+
+  const finalKey =
+    (threadKey && String(threadKey).trim()) ||
+    (bookingId ? `booking-${bookingId}` : "") ||
+    (studentAccountId ? `account-${studentAccountId}` : "") ||
+    phoneKey ||
+    `guest-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const res = db.prepare(`
+    INSERT INTO support_chats (
+      thread_key, student_name, phone, course, room_title, assigned_room_number,
+      booking_id, student_account_id, status, unread_admin, unread_student, last_message
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, 0, '')
+  `).run(
+    finalKey,
+    String(studentName || "Talaba").trim() || "Talaba",
+    String(phone || "").trim(),
+    String(course || "").trim(),
+    String(roomTitle || "").trim(),
+    String(assignedRoomNumber || "").trim(),
+    bookingId ? Number(bookingId) : null,
+    studentAccountId ? Number(studentAccountId) : null
+  );
+
+  return db.prepare("SELECT * FROM support_chats WHERE id = ?").get(res.lastInsertRowid);
+}
+
+export function formatSupportChat(chatRow, includeMessages = true) {
+  if (!chatRow) return null;
+  const messages = includeMessages
+    ? db
+        .prepare("SELECT * FROM support_chat_messages WHERE chat_id = ? ORDER BY id ASC")
+        .all(chatRow.id)
+        .map((m) => ({
+          id: m.id,
+          chatId: m.chat_id,
+          senderRole: m.sender_role,
+          senderName: m.sender_name,
+          message: m.message,
+          createdAt: m.created_at
+        }))
+    : [];
+  return {
+    id: chatRow.id,
+    threadKey: chatRow.thread_key,
+    studentName: chatRow.student_name,
+    phone: chatRow.phone,
+    course: chatRow.course || "",
+    roomTitle: chatRow.room_title || "",
+    assignedRoomNumber: chatRow.assigned_room_number || "",
+    bookingId: chatRow.booking_id,
+    studentAccountId: chatRow.student_account_id,
+    status: chatRow.status,
+    unreadAdmin: chatRow.unread_admin || 0,
+    unreadStudent: chatRow.unread_student || 0,
+    lastMessage: chatRow.last_message || (messages[messages.length - 1]?.message ?? ""),
+    updatedAt: chatRow.updated_at,
+    createdAt: chatRow.created_at,
+    messages
+  };
+}
+
+export function getAdminSupportChats() {
+  const rows = db.prepare(`
+    SELECT * FROM support_chats
+    ORDER BY unread_admin DESC, updated_at DESC, id DESC
+  `).all();
+  return rows.map((r) => formatSupportChat(r, true));
 }
 
 export function formatRoomInventory(row) {

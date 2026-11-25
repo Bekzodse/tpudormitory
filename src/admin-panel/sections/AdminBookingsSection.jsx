@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { CalendarDays, Check, DoorOpen, Download, Phone, Send, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, DoorOpen, Download, MessageSquare, Phone, Send, Trash2, X } from "lucide-react";
 import { downloadBookingsCsv, PAYMENT_LABELS, SectionTotalsBar, STATUS_LABELS } from "../utils/AdminHelpers";
 
 export default function AdminBookingsSection({
@@ -7,7 +7,8 @@ export default function AdminBookingsSection({
   totals,
   busyId,
   runAdminRequest,
-  onOpenUserFromBooking
+  onOpenUserFromBooking,
+  onOpenChatFromBooking
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [roomCategoryFilter, setRoomCategoryFilter] = useState("all");
@@ -289,6 +290,15 @@ export default function AdminBookingsSection({
                       }
                     >
                       Kutilmoqdaga qaytarish
+                    </button>
+                  )}
+                  {onOpenChatFromBooking && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onOpenChatFromBooking(b)}
+                    >
+                      <MessageSquare size={14} /> Talaba bilan chat
                     </button>
                   )}
                   <button

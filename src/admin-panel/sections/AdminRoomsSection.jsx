@@ -22,6 +22,14 @@ export default function AdminRoomsSection({
   const [dormSearch, setDormSearch] = useState("");
   const [showInventoryDrawer, setShowInventoryDrawer] = useState(true);
   const [showGalleryDrawer, setShowGalleryDrawer] = useState(false);
+  const [inlineRoomForm, setInlineRoomForm] = useState({
+    roomNumber: "",
+    floor: "4",
+    roomTypeId: "1",
+    customPrice: "1 100 000 so‘m",
+    image: "/images/room3.jpeg",
+    description: ""
+  });
   const [galleryForm, setGalleryForm] = useState({
     title: "",
     category: "rooms",
@@ -166,6 +174,124 @@ export default function AdminRoomsSection({
           </button>
         </div>
       </div>
+
+      {/* Direct Inline Room Entry Form */}
+      <section className="admin-panel-card">
+        <div className="admin-panel-card-head" style={{ marginBottom: 10 }}>
+          <div>
+            <h2><DoorOpen size={18} /> Yangi Xona Kiritish va Qo‘shish (Tezkor Panel)</h2>
+            <small style={{ color: "var(--color-muted)", fontSize: 12.5 }}>
+              Xona raqami, qavati, turi, oylik narxi va rasmini shu yerdan to‘g‘ridan-to‘g‘ri kiriting.
+            </small>
+          </div>
+        </div>
+        <form
+          className="admin-inline-room-form"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const ok = await runAdminRequest({
+              url: "/api/admin/dorm-rooms",
+              body: {
+                roomNumber: inlineRoomForm.roomNumber,
+                floor: Number(inlineRoomForm.floor),
+                roomTypeId: Number(inlineRoomForm.roomTypeId),
+                customPrice: inlineRoomForm.customPrice,
+                image: inlineRoomForm.image,
+                description: inlineRoomForm.description
+              },
+              busyKey: "inline-add-room",
+              successMsg: `${inlineRoomForm.roomNumber}-xona bazaga va saytga muvaffaqiyatli kiritildi!`
+            });
+            if (ok) {
+              setInlineRoomForm((p) => ({ ...p, roomNumber: "", description: "" }));
+            }
+          }}
+        >
+          <label className="input-group">
+            <span>Xona raqami *</span>
+            <input
+              required
+              placeholder="Masalan: 405"
+              value={inlineRoomForm.roomNumber}
+              onChange={(e) => setInlineRoomForm((p) => ({ ...p, roomNumber: e.target.value }))}
+            />
+          </label>
+          <label className="input-group">
+            <span>Qavat *</span>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              required
+              value={inlineRoomForm.floor}
+              onChange={(e) => setInlineRoomForm((p) => ({ ...p, floor: e.target.value }))}
+            />
+          </label>
+          <label className="input-group">
+            <span>Xona turi va sig‘imi *</span>
+            <select
+              value={inlineRoomForm.roomTypeId}
+              onChange={(e) => {
+                const rt = overview.rooms.find((r) => String(r.id) === e.target.value);
+                setInlineRoomForm((p) => ({
+                  ...p,
+                  roomTypeId: e.target.value,
+                  customPrice: rt ? rt.price : p.customPrice,
+                  image: rt?.image || p.image
+                }));
+              }}
+            >
+              {overview.rooms.map((rt) => (
+                <option key={rt.id} value={rt.id}>
+                  {rt.title.replace(/^\d+\s*\/\s*/, "")} ({rt.spotsPerRoom} o‘rin)
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="input-group">
+            <span>Oylik narxi (so‘m) *</span>
+            <input
+              required
+              placeholder="1 100 000 so‘m"
+              value={inlineRoomForm.customPrice}
+              onChange={(e) => setInlineRoomForm((p) => ({ ...p, customPrice: e.target.value }))}
+            />
+          </label>
+          <label className="input-group">
+            <span>Xona rasmi</span>
+            <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer", height: 38 }}>
+              <Camera size={14} />
+              <span>{inlineRoomForm.image?.startsWith("data:") ? "Rasm yuklandi ✓" : "Rasm tanlash"}</span>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    const dataUrl = await readRoomImageFile(file);
+                    setInlineRoomForm((p) => ({ ...p, image: dataUrl }));
+                  } catch (err) {
+                    if (showToast) showToast(err.message);
+                  }
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </label>
+          <div style={{ display: "flex", alignItems: "flex-end" }}>
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm"
+              style={{ height: 38, width: "100%" }}
+              disabled={busyId === "inline-add-room"}
+            >
+              <Plus size={15} /> {busyId === "inline-add-room" ? "Kiritilmoqda..." : "Xonani kiritish"}
+            </button>
+          </div>
+        </form>
+      </section>
 
       {showInventoryDrawer && (
         <section className="admin-panel-card">

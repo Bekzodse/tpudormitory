@@ -2,13 +2,16 @@ import { Router } from "express";
 import {
   db,
   formatRoomInventory,
+  formatSupportChat,
   getAnnouncements,
   getAvailableImages,
   getFaqItems,
   getGalleryPhotos,
   getHomepageSettings,
+  getOrCreateSupportChat,
   getPublicDormRooms,
-  getStudentPortalData
+  getStudentPortalData,
+  normalizePhoneKey
 } from "../db/database.js";
 import { getSession } from "../utils/auth.js";
 
@@ -100,7 +103,38 @@ router.post("/bookings", (request, response) => {
   );
 
   const created = db.prepare("SELECT * FROM bookings WHERE id = ?").get(result.lastInsertRowid);
-  return response.status(201).json({ booking: created, message: "Arizangiz bazaga saqlandi!" });
+  const chatRow = getOrCreateSupportChat({
+    bookingId: created.id,
+    studentAccountId: session ? session.accountId : null,
+    studentName: cleanName,
+    phone: cleanPhone,
+    course: cleanCourse,
+    roomTitle: inv.title,
+    assignedRoomNumber: cleanPrefRoom
+  });
+  const msgCount = db.prepare("SELECT COUNT(*) AS cnt FROM support_chat_messages WHERE chat_id = ?").get(chatRow.id)?.cnt || 0;
+  if (msgCount === 0) {
+    const welcomeText = `Assalomu alaykum, ${cleanName}! "${inv.title}" bo‘yicha #${created.id}-sonli arizangiz qabul qilindi. Savollaringiz bo‘lsa shu chat orqali yozishingiz mumkin — administratorimiz javob beradi.`;
+    db.prepare(`
+      INSERT INTO support_chat_messages (chat_id, sender_role, sender_name, message)
+      VALUES (?, 'admin', 'TPU Support', ?)
+    `).run(chatRow.id, welcomeText);
+    if (cleanNotes) {
+      db.prepare(`
+        INSERT INTO support_chat_messages (chat_id, sender_role, sender_name, message)
+        VALUES (?, 'student', ?, ?)
+      `).run(chatRow.id, cleanName, cleanNotes);
+      db.prepare("UPDATE support_chats SET last_message = ?, unread_admin = unread_admin + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(cleanNotes, chatRow.id);
+    } else {
+      db.prepare("UPDATE support_chats SET last_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(welcomeText, chatRow.id);
+    }
+  }
+  const updatedChat = db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatRow.id);
+  return response.status(201).json({
+    booking: created,
+    chat: formatSupportChat(updatedChat, true),
+    message: "Arizangiz bazaga saqlandi!"
+  });
 });
 
 router.post("/contact", (request, response) => {
@@ -164,6 +198,90 @@ router.post("/student/maintenance", (request, response) => {
   return response.status(201).json({
     portal: getStudentPortalData(account),
     message: "Texnik xizmat so‘rovingiz ma’muriyatga yuborildi!"
+  });
+});
+
+router.get("/support/chat", (request, response) => {
+  const session = getSession(request);
+  const { threadKey, bookingId, phone } = request.query;
+
+  let chatRow = null;
+  if (threadKey) {
+    chatRow = db.prepare("SELECT * FROM support_chats WHERE thread_key = ?").get(String(threadKey));
+  }
+  if (!chatRow && bookingId) {
+    chatRow = db.prepare("SELECT * FROM support_chats WHERE booking_id = ?").get(Number(bookingId));
+  }
+  if (!chatRow && session?.accountId) {
+    chatRow = db.prepare("SELECT * FROM support_chats WHERE student_account_id = ?").get(Number(session.accountId));
+    if (!chatRow) {
+      const acc = db.prepare("SELECT * FROM accounts WHERE id = ?").get(session.accountId);
+      if (acc) {
+        chatRow = getOrCreateSupportChat({
+          studentAccountId: acc.id,
+          studentName: `${acc.first_name} ${acc.last_name}`.trim(),
+          phone: acc.phone || "",
+          course: acc.course || ""
+        });
+      }
+    }
+  }
+  if (!chatRow && phone) {
+    const pKey = normalizePhoneKey(phone);
+    if (pKey) chatRow = db.prepare("SELECT * FROM support_chats WHERE thread_key = ?").get(pKey);
+  }
+
+  if (!chatRow) {
+    return response.json({ chat: null });
+  }
+
+  db.prepare("UPDATE support_chats SET unread_student = 0 WHERE id = ?").run(chatRow.id);
+  const refreshed = db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatRow.id);
+  return response.json({ chat: formatSupportChat(refreshed, true) });
+});
+
+router.post("/support/message", (request, response) => {
+  const session = getSession(request);
+  const { threadKey, bookingId, studentName, phone, course, roomTitle, message } = request.body;
+  const cleanMsg = String(message || "").trim();
+  if (!cleanMsg) {
+    return response.status(400).json({ message: "Xabar matnini kiriting." });
+  }
+
+  let acc = null;
+  if (session?.accountId) {
+    acc = db.prepare("SELECT * FROM accounts WHERE id = ?").get(session.accountId);
+  }
+
+  const finalName = String(studentName || (acc ? `${acc.first_name} ${acc.last_name}` : "") || "Talaba").trim();
+  const finalPhone = String(phone || acc?.phone || "").trim();
+  const finalCourse = String(course || acc?.course || "").trim();
+
+  const chatRow = getOrCreateSupportChat({
+    threadKey,
+    bookingId: bookingId ? Number(bookingId) : null,
+    studentAccountId: acc ? acc.id : null,
+    studentName: finalName,
+    phone: finalPhone,
+    course: finalCourse,
+    roomTitle: String(roomTitle || "").trim()
+  });
+
+  db.prepare(`
+    INSERT INTO support_chat_messages (chat_id, sender_role, sender_name, message)
+    VALUES (?, 'student', ?, ?)
+  `).run(chatRow.id, finalName, cleanMsg);
+
+  db.prepare(`
+    UPDATE support_chats
+    SET last_message = ?, unread_admin = unread_admin + 1, unread_student = 0, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(cleanMsg, chatRow.id);
+
+  const updated = db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatRow.id);
+  return response.status(201).json({
+    chat: formatSupportChat(updated, true),
+    message: "Savolingiz adminga yuborildi!"
   });
 });
 

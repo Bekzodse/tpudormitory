@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays, CreditCard, DoorOpen, Download,
-  Globe, LayoutDashboard, Megaphone, Plus, Users, Wrench
+  Globe, LayoutDashboard, Megaphone, MessageSquare, Plus, Users, Wrench
 } from "lucide-react";
 import DashboardView from "../dashboard/DashboardView";
 import AdminSidebar from "./AdminSidebar";
@@ -13,6 +13,7 @@ import AdminPaymentsSection from "./sections/AdminPaymentsSection";
 import AdminMaintenanceSection from "./sections/AdminMaintenanceSection";
 import AdminCommunitySection from "./sections/AdminCommunitySection";
 import AdminSiteContentSection from "./sections/AdminSiteContentSection";
+import AdminChatsSection from "./sections/AdminChatsSection";
 import AdminModals from "./modals/AdminModals";
 
 export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) {
@@ -25,8 +26,9 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
   const [overview, setOverview] = useState({
     rooms: [], bookings: [], students: [], messages: [],
     dormRooms: [], residents: [], maintenance: [], announcements: [],
-    gallery: [], availableImages: [], homepage: null, faqs: []
+    gallery: [], availableImages: [], homepage: null, faqs: [], chats: []
   });
+  const [selectedChatId, setSelectedChatId] = useState(null);
   const [roomEdits, setRoomEdits] = useState({});
 
   // Resident filtering
@@ -89,7 +91,7 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
         messages: data.messages || [], dormRooms: data.dormRooms || [], residents: data.residents || [],
         maintenance: data.maintenance || [], announcements: data.announcements || [],
         gallery: data.gallery || [], availableImages: data.availableImages || [],
-        homepage: data.homepage || null, faqs: data.faqs || []
+        homepage: data.homepage || null, faqs: data.faqs || [], chats: data.chats || []
       });
       const edits = {};
       (data.rooms || []).forEach((r) => {
@@ -296,6 +298,21 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     showToast("Bu foydalanuvchi hali xonaga joylashtirilmagan — avval Qabul qilish tugmasini bosing.");
   };
 
+  const openChatFromBooking = (b) => {
+    const cleanPhone = (b.phone || "").replace(/\D/g, "");
+    const existingChat = (overview.chats || []).find(
+      (c) =>
+        c.bookingId === b.id ||
+        (b.student_account_id && c.studentAccountId === b.student_account_id) ||
+        (cleanPhone && (c.phone || "").replace(/\D/g, "") === cleanPhone) ||
+        c.studentName.toLowerCase() === b.student_name.toLowerCase()
+    );
+    if (existingChat) {
+      setSelectedChatId(existingChat.id);
+    }
+    setSection("chats");
+  };
+
   const handleResidentSubmit = async (e) => {
     e.preventDefault();
     const isEdit = residentModal?.mode === "edit";
@@ -309,9 +326,15 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     if (ok) setResidentModal(null);
   };
 
+  const unreadChatsCount = useMemo(
+    () => (overview.chats || []).reduce((s, c) => s + (c.unreadAdmin || 0), 0),
+    [overview.chats]
+  );
+
   const navItems = [
     { id: "dashboard", label: "Umumiy holat", icon: LayoutDashboard, badge: null },
     { id: "bookings", label: "Yangi so‘rovlar", icon: CalendarDays, badge: totals.pendingBookings || null, tone: totals.pendingBookings ? "is-warn" : "" },
+    { id: "chats", label: "Chatlar (Support)", icon: MessageSquare, badge: unreadChatsCount || (overview.chats || []).length || null, tone: unreadChatsCount ? "is-alert" : "" },
     { id: "dormRooms", label: "Xonalar va joylar", icon: DoorOpen, badge: overview.dormRooms.length },
     { id: "residents", label: "Yashovchi talabalar", icon: Users, badge: overview.residents.length },
     { id: "payments", label: "To‘lovlar va moliya", icon: CreditCard, badge: totals.overduePayCount || null, tone: totals.overduePayCount ? "is-alert" : "" },
@@ -323,7 +346,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
   const sectionMeta = {
     dashboard: { title: "Boshqaruv Paneli — Umumiy Ko‘rinish", subtitle: "Qavatlar bo‘yicha xona bandligi, kutilayotgan arizalar va texnik holatlarni bir qarashda nazorat qiling." },
     bookings: { title: "Kelib Tushgan Bron So‘rovlari", subtitle: "Talaba arizalarini ko‘rib chiqing, izoh qoldiring va tasdiqlashda darhol bo‘sh xonaga joylashtiring." },
-    dormRooms: { title: "Xona Raqamlari va Umumiy Fond", subtitle: "Har bir xona (201, 301, 401...) bo‘sh joylarini boshqaring yoki xonani bosib ichidagi talabalarni ko‘ring." },
+    chats: { title: "Foydalanuvchilar bilan Support Chatlar", subtitle: "Ariza topshirgan va yashovchi talabalarning savollariga to‘g‘ridan-to‘g‘ri javob bering." },
+    dormRooms: { title: "Xona Raqamlari va Umumiy Fond", subtitle: "Har bir xona (201, 301, 401...) bo‘sh joylarini boshqaring yoki yangi xonalarni kiriting." },
     residents: { title: "Yashovchi Talabalar Reestri", subtitle: "Barcha talabalarni qidirish, ma’lumotlarini tahrirlash, boshqa xonaga ko‘chirish va Excel (CSV) yuklash." },
     payments: { title: "Oylik To‘lovlar va Moliya Nazorati", subtitle: "Yotoqxona tushum rejasini kuzating, to‘lovlarni tasdiqlang va qarzdorlarga eslatma yuboring." },
     maintenance: { title: "Texnik Xizmat va Ta’mirlash", subtitle: "Xonalardagi santexnika, elektr, konditsioner va Wi-Fi nosozliklarini qayd eting va hal qiling." },
@@ -391,7 +415,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
           {error && <div className="auth-error-alert" role="alert">{error}</div>}
 
           {section === "dashboard" && <DashboardView overview={overview} totals={totals} roomsByFloor={roomsByFloor} onInspectRoom={setInspectedRoomId} onNavigate={setSection} busyId={busyId} runAdminRequest={runAdminRequest} />}
-          {section === "bookings" && <AdminBookingsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onOpenUserFromBooking={openUserFromBooking} />}
+          {section === "bookings" && <AdminBookingsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onOpenUserFromBooking={openUserFromBooking} onOpenChatFromBooking={openChatFromBooking} />}
+          {section === "chats" && <AdminChatsSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} selectedChatId={selectedChatId} setSelectedChatId={setSelectedChatId} />}
           {section === "dormRooms" && (
             <AdminRoomsSection
               overview={overview}

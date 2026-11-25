@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight, CalendarDays, Check, ShieldCheck, X } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, MessageSquare, ShieldCheck, X } from "lucide-react";
 import { COURSE_OPTIONS } from "../data/dormData";
 
 export default function BookingModal({
@@ -11,7 +11,8 @@ export default function BookingModal({
   rooms,
   publicDormRooms,
   closeBookingModal,
-  handleBookingSubmit
+  handleBookingSubmit,
+  onOpenSupportChat
 }) {
   return (
     <div className="modal-backdrop" onClick={closeBookingModal}>
@@ -37,11 +38,23 @@ export default function BookingModal({
             </span>
             <h2>Arizangiz qabul qilindi!</h2>
             <p>
-              Rahmat, <strong>{bookingForm.name}</strong>! Sizning <strong>"{bookingForm.room}"</strong> bo‘yicha arizangiz qabul qilindi. Tez orada administratorimiz <strong>{bookingForm.phone}</strong> raqamingizga qo‘ng‘iroq qilib, rasmiylashtirishni yakunlaydi.
+              Rahmat, <strong>{bookingForm.name}</strong>! Sizning <strong>"{bookingForm.room}"</strong> bo‘yicha arizangiz qabul qilindi. Endi administratorimiz bilan <strong>Support Chat</strong> orqali bevosita bog‘lanib, savollaringizni yozishingiz mumkin!
             </p>
-            <div className="success-actions">
-              <button className="btn btn-primary" onClick={closeBookingModal}>
-                Tushunarli, yopish
+            <div className="success-actions" style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              {onOpenSupportChat && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-glow"
+                  onClick={() => {
+                    closeBookingModal();
+                    onOpenSupportChat();
+                  }}
+                >
+                  <MessageSquare size={17} /> Admin bilan Support Chat (Savol so‘rash)
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={closeBookingModal}>
+                Yopish
               </button>
             </div>
           </div>
