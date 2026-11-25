@@ -5,4 +5,7 @@ dist
 server/data/auth.sqlite
 server/data/auth.sqlite-shm
 server/data/auth.sqlite-wal
+backend/data/auth.sqlite
+backend/data/auth.sqlite-shm
+backend/data/auth.sqlite-wal
 .env
