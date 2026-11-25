@@ -151,20 +151,64 @@ public class DormModels {
         public String createdAt;
     }
 
+    public static class GalleryCategory {
+        public long id;
+        public String slug;
+        public String name;
+        public String description;
+        public int sortOrder;
+        public String createdAt;
+
+        public GalleryCategory(long id, String slug, String name, String description, int sortOrder, String createdAt) {
+            this.id = id;
+            this.slug = slug;
+            this.name = name;
+            this.description = description;
+            this.sortOrder = sortOrder;
+            this.createdAt = createdAt;
+        }
+    }
+
     public static class GalleryPhoto {
         public long id;
         public String title;
         public String category;
         public String image;
         public String tag;
+        public String description;
         public String createdAt;
 
-        public GalleryPhoto(long id, String title, String category, String image, String tag, String createdAt) {
+        public GalleryPhoto(long id, String title, String category, String image, String tag, String description, String createdAt) {
             this.id = id;
             this.title = title;
             this.category = category;
             this.image = image;
             this.tag = tag;
+            this.description = description != null ? description : "";
+            this.createdAt = createdAt;
+        }
+
+        public GalleryPhoto(long id, String title, String category, String image, String tag, String createdAt) {
+            this(id, title, category, image, tag, "", createdAt);
+        }
+    }
+
+    public static class SiteBottomText {
+        public long id;
+        public String section;
+        public String title;
+        public String content;
+        public String badge;
+        public int sortOrder;
+        public String createdAt;
+
+        public SiteBottomText(long id, String section, String title, String content, String badge, int sortOrder, String createdAt) {
+            this.id = id;
+            this.section = section;
+            this.title = title;
+            this.content = content;
+            this.badge = badge;
+            this.sortOrder = sortOrder;
             this.createdAt = createdAt;
         }
     }

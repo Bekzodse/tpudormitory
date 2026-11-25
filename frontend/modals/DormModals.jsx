@@ -129,8 +129,13 @@ export function LightboxModal({ item, items, onClose, onSelect }) {
           <ChevronRight size={28} />
         </button>
         <div className="lightbox-caption">
-          <span className="caption-tag">{item.tag}</span>
+          <span className="caption-tag">{item.categoryName ? `${item.categoryName} • ${item.tag}` : item.tag}</span>
           <h3>{item.title}</h3>
+          {item.description && (
+            <p style={{ margin: "4px 0 0", fontSize: 13.5, color: "rgba(255,255,255,0.85)", maxWidth: 680 }}>
+              {item.description}
+            </p>
+          )}
           <span className="caption-counter">{currentIndex + 1} / {items.length}</span>
         </div>
       </div>

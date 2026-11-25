@@ -2,7 +2,14 @@ import React from "react";
 import { CalendarDays, Clock, Instagram, MapPin, Phone, Send } from "lucide-react";
 import TpuLogo from "../common/TpuLogo";
 
-export default function Footer({ rooms = [], navigateTo, setRoomFilter, openBookingModal, showToast }) {
+export default function Footer({ rooms = [], homepage, navigateTo, setRoomFilter, openBookingModal, showToast }) {
+  const aboutText =
+    homepage?.footerAbout ||
+    "Tashkent Perfect University talabalar turar joyi — xavfsiz, qulay va zamonaviy talabalik hayoti uchun barcha qulayliklar bilan ta’minlangan aqlli majmua.";
+  const copyrightText =
+    homepage?.footerCopyright ||
+    "© 2026 Tashkent Perfect University. Barcha huquqlar himoyalangan.";
+
   return (
     <footer className="footer" id="contact-footer">
       <div className="footer-top section-wrap">
@@ -16,9 +23,7 @@ export default function Footer({ rooms = [], navigateTo, setRoomFilter, openBook
               <span className="brand-org">Tashkent Perfect University</span>
             </div>
           </div>
-          <p className="footer-about-text">
-            Tashkent Perfect University talabalar turar joyi — xavfsiz, qulay va zamonaviy talabalik hayoti uchun barcha qulayliklar bilan ta’minlangan aqlli majmua.
-          </p>
+          <p className="footer-about-text">{aboutText}</p>
           <div className="footer-social-links">
             <a href="https://t.me" target="_blank" rel="noreferrer" aria-label="Telegram kanali">
               <Send size={18} />
@@ -90,7 +95,7 @@ export default function Footer({ rooms = [], navigateTo, setRoomFilter, openBook
       </div>
 
       <div className="footer-bottom section-wrap">
-        <p>© 2026 Tashkent Perfect University. Barcha huquqlar himoyalangan.</p>
+        <p>{copyrightText}</p>
         <div className="footer-legal-links">
           <a href="#privacy" onClick={(e) => { e.preventDefault(); showToast("Maxfiylik siyosati tasdiqlangan"); }}>Maxfiylik siyosati</a>
           <span>•</span>

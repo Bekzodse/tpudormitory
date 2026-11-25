@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   db,
+  ensureGalleryCategory,
   formatPriceUzs,
   formatRoomInventory,
   getAdminDormRooms,
@@ -10,11 +11,14 @@ import {
   getAnnouncements,
   getAvailableImages,
   getFaqItems,
+  getGalleryCategories,
   getGalleryPhotos,
   getHomepageSettings,
   getOrCreateSupportChat,
+  getSiteBottomTexts,
   parsePriceDigits,
-  saveUploadedImage
+  saveUploadedImage,
+  slugifyCategory
 } from "../db/database.js";
 import { createRequireAdmin, decryptSecret, encryptSecret, hashPassword, publicStudent } from "../utils/auth.js";
 
@@ -96,6 +100,8 @@ router.get("/overview", (_request, response) => {
     maintenance: getAdminMaintenance(),
     announcements: getAnnouncements(),
     gallery: getGalleryPhotos(),
+    galleryCategories: getGalleryCategories(),
+    bottomTexts: getSiteBottomTexts(),
     availableImages: getAvailableImages(),
     homepage: getHomepageSettings(),
     faqs: getFaqItems(),
@@ -156,7 +162,11 @@ router.put("/homepage", (request, response) => {
     titleSuffix,
     leadText,
     stats,
-    heroPhotos
+    heroPhotos,
+    footerAbout,
+    footerCopyright,
+    galleryTitle,
+    gallerySubtitle
   } = request.body;
 
   const nextBadge = String(eyebrowBadge ?? current.eyebrowBadge).trim() || current.eyebrowBadge;
@@ -165,6 +175,10 @@ router.put("/homepage", (request, response) => {
   const nextHighlight = String(titleHighlight ?? current.titleHighlight).trim();
   const nextSuffix = String(titleSuffix ?? current.titleSuffix).trim();
   const nextLead = String(leadText ?? current.leadText).trim() || current.leadText;
+  const nextFooterAbout = String(footerAbout ?? current.footerAbout ?? "").trim() || current.footerAbout;
+  const nextFooterCopy = String(footerCopyright ?? current.footerCopyright ?? "").trim() || current.footerCopyright;
+  const nextGalleryTitle = String(galleryTitle ?? current.galleryTitle ?? "").trim() || current.galleryTitle;
+  const nextGallerySub = String(gallerySubtitle ?? current.gallerySubtitle ?? "").trim() || current.gallerySubtitle;
 
   const nextStats = Array.isArray(stats) && stats.length > 0
     ? stats.map((st) => ({
@@ -185,7 +199,9 @@ router.put("/homepage", (request, response) => {
   db.prepare(`
     UPDATE homepage_settings
     SET eyebrow_badge = ?, eyebrow_status = ?, title_prefix = ?, title_highlight = ?, title_suffix = ?,
-        lead_text = ?, stats_json = ?, hero_photos_json = ?, updated_at = CURRENT_TIMESTAMP
+        lead_text = ?, stats_json = ?, hero_photos_json = ?,
+        footer_about = ?, footer_copyright = ?, gallery_title = ?, gallery_subtitle = ?,
+        updated_at = CURRENT_TIMESTAMP
     WHERE id = 1
   `).run(
     nextBadge,
@@ -195,7 +211,11 @@ router.put("/homepage", (request, response) => {
     nextSuffix,
     nextLead,
     JSON.stringify(nextStats),
-    JSON.stringify(nextPhotos)
+    JSON.stringify(nextPhotos),
+    nextFooterAbout,
+    nextFooterCopy,
+    nextGalleryTitle,
+    nextGallerySub
   );
 
   return response.json({
@@ -267,29 +287,208 @@ router.post("/upload-image", (request, response) => {
   });
 });
 
+router.post("/gallery-categories", (request, response) => {
+  const { name, slug, description = "" } = request.body;
+  const cleanName = String(name || "").trim();
+  if (!cleanName) {
+    return response.status(400).json({ message: "Bo‘lim nomini kiriting." });
+  }
+  const cleanSlug = slugifyCategory(slug || cleanName);
+  const existing = db.prepare("SELECT * FROM gallery_categories WHERE slug = ? OR LOWER(name) = LOWER(?)").get(cleanSlug, cleanName);
+  if (existing) {
+    return response.status(409).json({ message: "Bunday nomli fotogalereya bo‘limi allaqachon mavjud." });
+  }
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS max_ord FROM gallery_categories").get()?.max_ord || 0;
+  db.prepare(`
+    INSERT INTO gallery_categories (slug, name, description, sort_order)
+    VALUES (?, ?, ?, ?)
+  `).run(cleanSlug, cleanName, String(description || "").trim(), maxOrder + 1);
+
+  return response.status(201).json({
+    galleryCategories: getGalleryCategories(),
+    gallery: getGalleryPhotos(),
+    message: `"${cleanName}" bo‘limi fotogalereyaga qo‘shildi!`
+  });
+});
+
+router.patch("/gallery-categories/:id", (request, response) => {
+  const catId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM gallery_categories WHERE id = ?").get(catId);
+  if (!existing) return response.status(404).json({ message: "Bo‘lim topilmadi." });
+
+  const cleanName = request.body.name !== undefined ? String(request.body.name).trim() : existing.name;
+  const cleanDesc = request.body.description !== undefined ? String(request.body.description).trim() : existing.description;
+  if (!cleanName) {
+    return response.status(400).json({ message: "Bo‘lim nomi bo‘sh bo‘lmasligi kerak." });
+  }
+  db.prepare("UPDATE gallery_categories SET name = ?, description = ? WHERE id = ?").run(cleanName, cleanDesc, catId);
+  return response.json({
+    galleryCategories: getGalleryCategories(),
+    gallery: getGalleryPhotos(),
+    message: "Bo‘lim ma’lumotlari yangilandi!"
+  });
+});
+
+router.delete("/gallery-categories/:id", (request, response) => {
+  const catId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM gallery_categories WHERE id = ?").get(catId);
+  if (!existing) return response.status(404).json({ message: "Bo‘lim topilmadi." });
+
+  db.prepare("UPDATE gallery_photos SET category = 'campus' WHERE category = ?").run(existing.slug);
+  db.prepare("DELETE FROM gallery_categories WHERE id = ?").run(catId);
+
+  return response.json({
+    galleryCategories: getGalleryCategories(),
+    gallery: getGalleryPhotos(),
+    message: `"${existing.name}" bo‘limi o‘chirildi.`
+  });
+});
+
 router.post("/gallery", (request, response) => {
-  const { title, category = "rooms", tag = "Yotoqxona", imageData, imageUrl } = request.body;
+  const {
+    title,
+    category = "rooms",
+    newCategoryName = "",
+    newCategoryDescription = "",
+    tag = "Yotoqxona",
+    description = "",
+    imageData,
+    imageUrl
+  } = request.body;
   const cleanTitle = String(title || "").trim();
   const savedImg = imageData ? saveUploadedImage(imageData, "gallery") : String(imageUrl || "").trim();
   if (!cleanTitle || !savedImg) {
     return response.status(400).json({ message: "Rasm nomi va faylini kiriting." });
   }
+
+  let targetCategorySlug = String(category || "rooms").trim() || "rooms";
+  if (String(newCategoryName || "").trim()) {
+    const createdCat = ensureGalleryCategory({
+      name: String(newCategoryName).trim(),
+      description: String(newCategoryDescription || "").trim()
+    });
+    targetCategorySlug = createdCat.slug;
+  } else {
+    ensureGalleryCategory({ slug: targetCategorySlug, name: targetCategorySlug });
+  }
+
+  const cleanTag = String(tag || "").trim() || "Yotoqxona";
+  const cleanDesc = String(description || "").trim();
+
   db.prepare(`
-    INSERT INTO gallery_photos (title, category, image, tag)
-    VALUES (?, ?, ?, ?)
-  `).run(cleanTitle, String(category).trim() || "rooms", savedImg, String(tag).trim() || "Yotoqxona");
+    INSERT INTO gallery_photos (title, category, image, tag, description)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(cleanTitle, targetCategorySlug, savedImg, cleanTag, cleanDesc);
 
   return response.status(201).json({
     gallery: getGalleryPhotos(),
+    galleryCategories: getGalleryCategories(),
     availableImages: getAvailableImages(),
-    message: "Rasm fotogalereyaga qo‘shildi!"
+    message: "Rasm va pastki izoh fotogalereyaga qo‘shildi!"
+  });
+});
+
+router.patch("/gallery/:id", (request, response) => {
+  const photoId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM gallery_photos WHERE id = ?").get(photoId);
+  if (!existing) return response.status(404).json({ message: "Rasm topilmadi." });
+
+  const {
+    title,
+    category,
+    newCategoryName = "",
+    tag,
+    description,
+    imageData,
+    imageUrl
+  } = request.body;
+
+  let nextCategory = category !== undefined ? String(category).trim() || existing.category : existing.category;
+  if (String(newCategoryName || "").trim()) {
+    const createdCat = ensureGalleryCategory({ name: String(newCategoryName).trim() });
+    nextCategory = createdCat.slug;
+  }
+
+  const nextTitle = title !== undefined ? String(title).trim() || existing.title : existing.title;
+  const nextTag = tag !== undefined ? String(tag).trim() || existing.tag : existing.tag;
+  const nextDesc = description !== undefined ? String(description).trim() : (existing.description || "");
+  const nextImg = imageData
+    ? (saveUploadedImage(imageData, "gallery") || existing.image)
+    : (imageUrl !== undefined && String(imageUrl).trim() ? String(imageUrl).trim() : existing.image);
+
+  db.prepare(`
+    UPDATE gallery_photos
+    SET title = ?, category = ?, image = ?, tag = ?, description = ?
+    WHERE id = ?
+  `).run(nextTitle, nextCategory, nextImg, nextTag, nextDesc, photoId);
+
+  return response.json({
+    gallery: getGalleryPhotos(),
+    galleryCategories: getGalleryCategories(),
+    availableImages: getAvailableImages(),
+    message: "Fotogalereya rasmi va pastki gapi yangilandi!"
   });
 });
 
 router.delete("/gallery/:id", (request, response) => {
   const res = db.prepare("DELETE FROM gallery_photos WHERE id = ?").run(Number(request.params.id));
   if (!res.changes) return response.status(404).json({ message: "Rasm topilmadi." });
-  return response.json({ gallery: getGalleryPhotos() });
+  return response.json({
+    gallery: getGalleryPhotos(),
+    galleryCategories: getGalleryCategories()
+  });
+});
+
+router.post("/bottom-texts", (request, response) => {
+  const { section = "gallery", title, content = "", badge = "" } = request.body;
+  const cleanTitle = String(title || "").trim();
+  const cleanContent = String(content || "").trim();
+  const cleanSection = ["gallery", "homepage"].includes(section) ? section : "gallery";
+  if (!cleanTitle) {
+    return response.status(400).json({ message: "Gap yoki sarlavha matnini kiriting." });
+  }
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS max_ord FROM site_bottom_texts WHERE section = ?").get(cleanSection)?.max_ord || 0;
+  db.prepare(`
+    INSERT INTO site_bottom_texts (section, title, content, badge, sort_order)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(cleanSection, cleanTitle, cleanContent, String(badge || "").trim(), maxOrder + 1);
+
+  return response.status(201).json({
+    bottomTexts: getSiteBottomTexts(),
+    message: "Yangi pastki gap bazaga saqlandi va saytga qo‘shildi!"
+  });
+});
+
+router.patch("/bottom-texts/:id", (request, response) => {
+  const itemId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM site_bottom_texts WHERE id = ?").get(itemId);
+  if (!existing) return response.status(404).json({ message: "Ma’lumot topilmadi." });
+
+  const cleanTitle = request.body.title !== undefined ? String(request.body.title).trim() : existing.title;
+  const cleanContent = request.body.content !== undefined ? String(request.body.content).trim() : existing.content;
+  const cleanBadge = request.body.badge !== undefined ? String(request.body.badge).trim() : existing.badge;
+  if (!cleanTitle) {
+    return response.status(400).json({ message: "Gap matni bo‘sh bo‘lmasligi kerak." });
+  }
+  db.prepare("UPDATE site_bottom_texts SET title = ?, content = ?, badge = ? WHERE id = ?").run(
+    cleanTitle,
+    cleanContent,
+    cleanBadge,
+    itemId
+  );
+  return response.json({
+    bottomTexts: getSiteBottomTexts(),
+    message: "Pastki gap yangilandi!"
+  });
+});
+
+router.delete("/bottom-texts/:id", (request, response) => {
+  const res = db.prepare("DELETE FROM site_bottom_texts WHERE id = ?").run(Number(request.params.id));
+  if (!res.changes) return response.status(404).json({ message: "Ma’lumot topilmadi." });
+  return response.json({
+    bottomTexts: getSiteBottomTexts(),
+    message: "Pastki gap o‘chirildi."
+  });
 });
 
 router.patch("/bookings/:id", (request, response) => {

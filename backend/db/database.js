@@ -119,12 +119,30 @@ db.exec(`
     pinned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS gallery_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
   CREATE TABLE IF NOT EXISTS gallery_photos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'rooms',
     image TEXT NOT NULL,
     tag TEXT NOT NULL DEFAULT 'Yotoqxona',
+    description TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS site_bottom_texts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    section TEXT NOT NULL DEFAULT 'gallery',
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    badge TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
   CREATE TABLE IF NOT EXISTS homepage_settings (
@@ -137,6 +155,10 @@ db.exec(`
     lead_text TEXT NOT NULL,
     stats_json TEXT NOT NULL,
     hero_photos_json TEXT NOT NULL,
+    footer_about TEXT NOT NULL DEFAULT '',
+    footer_copyright TEXT NOT NULL DEFAULT '',
+    gallery_title TEXT NOT NULL DEFAULT '',
+    gallery_subtitle TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
   CREATE TABLE IF NOT EXISTS faq_items (
@@ -210,6 +232,15 @@ if (!msgCols.includes("admin_note")) db.exec("ALTER TABLE contact_messages ADD C
 const maintCols = db.prepare("PRAGMA table_info(maintenance_requests)").all().map((c) => c.name);
 if (!maintCols.includes("reporter_name")) db.exec("ALTER TABLE maintenance_requests ADD COLUMN reporter_name TEXT");
 if (!maintCols.includes("admin_note")) db.exec("ALTER TABLE maintenance_requests ADD COLUMN admin_note TEXT");
+
+const galleryCols = db.prepare("PRAGMA table_info(gallery_photos)").all().map((c) => c.name);
+if (!galleryCols.includes("description")) db.exec("ALTER TABLE gallery_photos ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+
+const homeCols = db.prepare("PRAGMA table_info(homepage_settings)").all().map((c) => c.name);
+if (!homeCols.includes("footer_about")) db.exec("ALTER TABLE homepage_settings ADD COLUMN footer_about TEXT NOT NULL DEFAULT ''");
+if (!homeCols.includes("footer_copyright")) db.exec("ALTER TABLE homepage_settings ADD COLUMN footer_copyright TEXT NOT NULL DEFAULT ''");
+if (!homeCols.includes("gallery_title")) db.exec("ALTER TABLE homepage_settings ADD COLUMN gallery_title TEXT NOT NULL DEFAULT ''");
+if (!homeCols.includes("gallery_subtitle")) db.exec("ALTER TABLE homepage_settings ADD COLUMN gallery_subtitle TEXT NOT NULL DEFAULT ''");
 
 function seedDefaults() {
   const seedRoom = db.prepare(`
@@ -323,34 +354,100 @@ function seedDefaults() {
     );
   }
 
-  if ((db.prepare("SELECT COUNT(*) AS cnt FROM gallery_photos").get()?.cnt || 0) === 0) {
-    const insGallery = db.prepare(`
-      INSERT INTO gallery_photos (title, category, image, tag)
+  if ((db.prepare("SELECT COUNT(*) AS cnt FROM gallery_categories").get()?.cnt || 0) === 0) {
+    const insCat = db.prepare(`
+      INSERT INTO gallery_categories (slug, name, description, sort_order)
       VALUES (?, ?, ?, ?)
     `);
+    const defaultCats = [
+      ["rooms", "Xonalar", "2, 4 va 6 kishilik zamonaviy jihozlangan talabalar yotoqxona xonalari.", 1],
+      ["study", "Kutubxona", "Sokin mutolaa zallari, kovorking va yuqori tezlikdagi Wi-Fi o‘quv hududlari.", 2],
+      ["dining", "Oshxona", "Har bir qavatda zamonaviy maishiy texnikalar bilan jihozlangan oshxona va ovqatlanish maydoni.", 3],
+      ["sports", "Sport", "Basketbol maydonchasi, street workout va sog‘lom turmush tarzi uchun sport majmuasi.", 4],
+      ["campus", "Kampus", "Tashkent Perfect University bosh korpusi, yashil xiyobon va yotoqxona hovlisi.", 5]
+    ];
+    for (const c of defaultCats) insCat.run(...c);
+  }
+
+  if ((db.prepare("SELECT COUNT(*) AS cnt FROM gallery_photos").get()?.cnt || 0) === 0) {
+    const insGallery = db.prepare(`
+      INSERT INTO gallery_photos (title, category, image, tag, description)
+      VALUES (?, ?, ?, ?, ?)
+    `);
     const defaultGallery = [
-      ["Yotoqxona Asosiy Binosi", "rooms", "/images/campus-2.jpg", "Bino"],
-      ["4 Kishilik Yotoqxona", "rooms", "/images/room-4.jpg", "4 o‘rin"],
-      ["6 Kishilik Yotoqxona", "rooms", "/images/room-6.jpg", "6 o‘rin"],
-      ["2 Kishilik Yotoqxona", "rooms", "/images/room3.jpeg", "2 o‘rin"],
-      ["Keng Talabalar Kutubxonasi", "study", "/images/l1.jpeg", "Mutolaa zali"],
-      ["Sokin O‘quv va Kovorking Hududi", "study", "/images/l2.jpeg", "O‘qish zali"],
-      ["Guruh Ishlari va Kitobxonlik Zali", "study", "/images/l3.jpeg", "Kovorking"],
-      ["Har Bir Qavatdagi Oshxona", "dining", "/images/k1.jpeg", "Pishirish maydoni"],
-      ["Umumiy Ovqatlanish Maydoni", "dining", "/images/k2.jpeg", "Oshxona"],
-      ["Maishiy Texnika va Jihozlar", "dining", "/images/k3.jpeg", "Jihozlar"],
-      ["Ochiq Basketbol Maydonchasi", "sports", "/images/b1.jpeg", "Sport"],
-      ["Talabalar Sport Majmuasi", "sports", "/images/b2.webp", "Jismoniy tarbiya"],
-      ["Street Workout Maydoni", "sports", "/images/b3.jpeg", "Mashg‘ulot"],
-      ["TPU Bosh O‘quv Korpus Fasad", "campus", "/images/d1.jpg", "Universitet binosi"],
-      ["Yotoqxona Kirish Maydoni va Hovli", "campus", "/images/d2.jpeg", "Yotoqxona hovlisi"],
-      ["Kampus Xiyoboni va Yashil Hudud", "campus", "/images/d3.jpg", "Yashil hudud"],
-      ["Yotoqxona Zamonaviy Korpus Binosi", "campus", "/images/d4.jpg", "Turar joy binosi"],
-      ["Kechki Yoritilgan Kampus", "campus", "/images/d6.jpeg", "Kechki manzara"],
-      ["Talabalar Shaharchasi Umumiy Ko‘rinishi", "campus", "/images/dormitory-building.png", "Bosh me’moriy majmua"],
-      ["Universitet Kampusi Panorama", "campus", "/images/university-campus.png", "Kampus"]
+      ["Yotoqxona Asosiy Binosi", "rooms", "/images/campus-2.jpg", "Bino", "Zamonaviy me’morchilik asosida qurilgan TPU talabalar turar joyi bosh binosi."],
+      ["4 Kishilik Yotoqxona", "rooms", "/images/room-4.jpg", "4 o‘rin", "Yorug‘ va keng 4 o‘rinli xona: ikki qavatli mustahkam karavotlar, shaxsiy tortmalar va o‘qish stoli."],
+      ["6 Kishilik Yotoqxona", "rooms", "/images/room-6.jpg", "6 o‘rin", "Hamyonbop va shinam 6 kishilik xona: har bir talaba uchun alohida karavot va tumba."],
+      ["2 Kishilik Yotoqxona", "rooms", "/images/room3.jpeg", "2 o‘rin", "Shaxsiy sanuzel, konditsioner va 2 ta keng o‘qish stoli bilan jihozlangan 2 kishilik xona."],
+      ["Keng Talabalar Kutubxonasi", "study", "/images/l1.jpeg", "Mutolaa zali", "Talabalar dars tayyorlashi va ilmiy izlanishlari uchun boy kitob fondiga ega sokin kutubxona."],
+      ["Sokin O‘quv va Kovorking Hududi", "study", "/images/l2.jpeg", "O‘qish zali", "Tezkor 500 Mbit/s Wi-Fi va elektr rozetkalari bilan ta’minlangan individual o‘quv stollari."],
+      ["Guruh Ishlari va Kitobxonlik Zali", "study", "/images/l3.jpeg", "Kovorking", "Loyiha va taqdimotlar ustida jamoaviy ishlash uchun mo‘ljallangan zamonaviy kovorking hududi."],
+      ["Har Bir Qavatdagi Oshxona", "dining", "/images/k1.jpeg", "Pishirish maydoni", "Elektr plitalar, mikroto‘lqinli pech, muzlatgich va toza suv filtrlari bilan jihozlangan oshxona."],
+      ["Umumiy Ovqatlanish Maydoni", "dining", "/images/k2.jpeg", "Oshxona", "Talabalar birgalikda ovqatlanishi va suhbatlashishi uchun shinam oshxona stollari."],
+      ["Maishiy Texnika va Jihozlar", "dining", "/images/k3.jpeg", "Jihozlar", "Kunlik foydalanish uchun barcha zarur maishiy texnikalar bepul taqdim etiladi."],
+      ["Ochiq Basketbol Maydonchasi", "sports", "/images/b1.jpeg", "Sport", "Darsdan bo‘sh vaqtda jamoaviy sport o‘yinlari o‘tkazish uchun maxsus qoplamali maydon."],
+      ["Talabalar Sport Majmuasi", "sports", "/images/b2.webp", "Jismoniy tarbiya", "Sog‘lom turmush tarzi va jismoniy mashg‘ulotlar uchun barcha sharoitlarga ega sport zali."],
+      ["Street Workout Maydoni", "sports", "/images/b3.jpeg", "Mashg‘ulot", "Ochiq havoda turnik, brus va kuch mashqlari bilan shug‘ullanish uchun workout hududi."],
+      ["TPU Bosh O‘quv Korpus Fasad", "campus", "/images/d1.jpg", "Universitet binosi", "Yotoqxonadan piyoda bor-yo‘g‘i 3 daqiqalik masofada joylashgan universitet o‘quv binosi."],
+      ["Yotoqxona Kirish Maydoni va Hovli", "campus", "/images/d2.jpeg", "Yotoqxona hovlisi", "24/7 videokuzatuv va Face ID nazorati ostidagi xavfsiz kirish maydoni."],
+      ["Kampus Xiyoboni va Yashil Hudud", "campus", "/images/d3.jpg", "Yashil hudud", "Manzarali daraxtlar va o‘rindiqlar bilan bezatilgan toza havoli talabalar xiyoboni."],
+      ["Yotoqxona Zamonaviy Korpus Binosi", "campus", "/images/d4.jpg", "Turar joy binosi", "Issiqlik va ovoz izolyatsiyasiga ega ko‘p qavatli yangi yotoqxona korpusi."],
+      ["Kechki Yoritilgan Kampus", "campus", "/images/d6.jpeg", "Kechki manzara", "Kechki paytda to‘liq LED chiroqlar bilan yoritilgan xavfsiz va go‘zal kampus manzarasi."],
+      ["Talabalar Shaharchasi Umumiy Ko‘rinishi", "campus", "/images/dormitory-building.png", "Bosh me’moriy majmua", "O‘quv binolari, yotoqxona, sport va dam olish maskanlarini birlashtirgan yagona majmua."],
+      ["Universitet Kampusi Panorama", "campus", "/images/university-campus.png", "Kampus", "Tashkent Perfect University zamonaviy talabalar shaharchasining yuqoridan ko‘rinishi."]
     ];
     for (const g of defaultGallery) insGallery.run(...g);
+  } else {
+    db.prepare(`
+      UPDATE gallery_photos
+      SET description = CASE category
+        WHEN 'rooms' THEN title || ' — zamonaviy mebel, ortopedik matras va tezkor Wi-Fi bilan jihozlangan shinam xona.'
+        WHEN 'study' THEN title || ' — talabalar sokin mutolaa qilishi va dars tayyorlashi uchun qulay o‘quv hududi.'
+        WHEN 'dining' THEN title || ' — barcha zarur maishiy texnika va jihozlarga ega toza oshxona maydoni.'
+        WHEN 'sports' THEN title || ' — talabalarning bo‘sh vaqtini mazmunli va sog‘lom o‘tkazishi uchun sport maskani.'
+        ELSE title || ' — Tashkent Perfect University talabalar shaharchasi va yotoqxona majmuasi.'
+      END
+      WHERE description IS NULL OR TRIM(description) = ''
+    `).run();
+  }
+
+  if ((db.prepare("SELECT COUNT(*) AS cnt FROM site_bottom_texts").get()?.cnt || 0) === 0) {
+    const insBottom = db.prepare(`
+      INSERT INTO site_bottom_texts (section, title, content, badge, sort_order)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const defaultBottomTexts = [
+      [
+        "gallery",
+        "100% Haqiqiy Kampus va Xona Suratlari",
+        "Fotogalereyadagi barcha rasmlar Tashkent Perfect University talabalar turar joyi, xonalari va o‘quv korpuslaridan olingan haqiqiy suratlardir.",
+        "Original foto",
+        1
+      ],
+      [
+        "gallery",
+        "Barcha Jihozlar va Qulayliklar Tayyor",
+        "Har bir xonada ortopedik to‘shak, shaxsiy o‘qish stoli, kiyim shkafi, konditsioner, markaziy isitish va 500 Mbit/s optik Wi-Fi mavjud.",
+        "To‘liq jihozlangan",
+        2
+      ],
+      [
+        "gallery",
+        "Jonli Ekskursiya va Ko‘zdankechirish",
+        "Yotoqxonaga kelib xonalar, oshxona, kutubxona va sport maydonchalarini ota-onangiz bilan birga bevosita ko‘rishingiz mumkin (Dush–Shan 09:00–18:00).",
+        "Ochiq eshiklar",
+        3
+      ],
+      ["homepage", "Barcha to‘lovlar narx ichida", "Elektr, issiq-sovuq suv va internet oylik to‘lov ichida", "100%", 1],
+      ["homepage", "500 Mbit/s Tezkor Wi-Fi", "Har bir qavatda optik tolali yuqori tezlikdagi internet", "Wi-Fi 6", 2],
+      ["homepage", "24/7 Smart Face ID", "Turniket va videokuzatuv orqali doimiy xavfsizlik", "Xavfsiz", 3],
+      ["homepage", "Bepul kir yuvish majmuasi", "Zamonaviy kir yuvish va quritish mashinalari bepul", "Bepul", 4],
+      ["homepage", "Sokin kutubxona va kovorking", "24 soat ochiq mutolaa va guruh ishlari zali", "Kovorking", 5],
+      ["homepage", "Fitness zali & Street Workout", "Basketbol va ochiq sport maydonchalari", "Sport", 6],
+      ["homepage", "Har bir qavatda oshxona", "Muzlatgich, elektr plita va mikroto‘lqinli pechlar", "Oshxona", 7],
+      ["homepage", "Universitetgacha 3 daqiqa", "O‘quv korpuslari bilan bitta kampus hududida", "Yaqin", 8]
+    ];
+    for (const bt of defaultBottomTexts) insBottom.run(...bt);
   }
 
   if (!db.prepare("SELECT id FROM homepage_settings WHERE id = 1").get()) {
@@ -625,14 +722,84 @@ export function getAvailableImages() {
   return out;
 }
 
+export function slugifyCategory(input) {
+  const cleaned = String(input || "")
+    .toLowerCase()
+    .replace(/o['‘’`]/g, "o")
+    .replace(/g['‘’`]/g, "g")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned || `section-${Date.now().toString(36)}`;
+}
+
+export function ensureGalleryCategory({ slug, name, description = "" }) {
+  const cleanName = String(name || slug || "Yangi bo‘lim").trim();
+  const cleanSlug = slugifyCategory(slug || cleanName);
+  const existing = db.prepare("SELECT * FROM gallery_categories WHERE slug = ? OR LOWER(name) = LOWER(?)").get(cleanSlug, cleanName);
+  if (existing) {
+    if (description && !existing.description) {
+      db.prepare("UPDATE gallery_categories SET description = ? WHERE id = ?").run(String(description).trim(), existing.id);
+    }
+    return db.prepare("SELECT * FROM gallery_categories WHERE id = ?").get(existing.id);
+  }
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS max_ord FROM gallery_categories").get()?.max_ord || 0;
+  const res = db.prepare(`
+    INSERT INTO gallery_categories (slug, name, description, sort_order)
+    VALUES (?, ?, ?, ?)
+  `).run(cleanSlug, cleanName, String(description || "").trim(), maxOrder + 1);
+  return db.prepare("SELECT * FROM gallery_categories WHERE id = ?").get(res.lastInsertRowid);
+}
+
+export function getGalleryCategories() {
+  const cats = db.prepare("SELECT * FROM gallery_categories ORDER BY sort_order ASC, id ASC").all();
+  const counts = db.prepare("SELECT category, COUNT(*) AS cnt FROM gallery_photos GROUP BY category").all();
+  const countMap = new Map(counts.map((c) => [c.category, c.cnt]));
+
+  for (const row of counts) {
+    if (row.category && !cats.some((c) => c.slug === row.category)) {
+      const created = ensureGalleryCategory({ slug: row.category, name: row.category });
+      cats.push(created);
+    }
+  }
+
+  return cats.map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    name: c.name,
+    description: c.description || "",
+    sortOrder: c.sort_order,
+    photoCount: countMap.get(c.slug) || 0,
+    createdAt: c.created_at
+  }));
+}
+
 export function getGalleryPhotos() {
+  const cats = db.prepare("SELECT slug, name FROM gallery_categories").all();
+  const catMap = new Map(cats.map((c) => [c.slug, c.name]));
   return db.prepare("SELECT * FROM gallery_photos ORDER BY id DESC").all().map((g) => ({
     id: g.id,
     title: g.title,
     category: g.category,
+    categoryName: catMap.get(g.category) || g.category,
     image: g.image,
     tag: g.tag,
+    description: g.description || "",
     createdAt: g.created_at
+  }));
+}
+
+export function getSiteBottomTexts(section = null) {
+  const rows = section
+    ? db.prepare("SELECT * FROM site_bottom_texts WHERE section = ? ORDER BY sort_order ASC, id ASC").all(String(section))
+    : db.prepare("SELECT * FROM site_bottom_texts ORDER BY section ASC, sort_order ASC, id ASC").all();
+  return rows.map((r) => ({
+    id: r.id,
+    section: r.section,
+    title: r.title,
+    content: r.content || "",
+    badge: r.badge || "",
+    sortOrder: r.sort_order,
+    createdAt: r.created_at
   }));
 }
 
@@ -660,6 +827,18 @@ export function getHomepageSettings() {
     leadText: row.lead_text,
     stats,
     heroPhotos,
+    footerAbout:
+      row.footer_about ||
+      "Tashkent Perfect University talabalar turar joyi — xavfsiz, qulay va zamonaviy talabalik hayoti uchun barcha qulayliklar bilan ta’minlangan aqlli majmua.",
+    footerCopyright:
+      row.footer_copyright ||
+      "© 2026 Tashkent Perfect University. Barcha huquqlar himoyalangan.",
+    galleryTitle:
+      row.gallery_title ||
+      "Kampus va Yotoqxona Fotogalereyasi",
+    gallerySubtitle:
+      row.gallery_subtitle ||
+      "Xonalar, oshxonalar, kutubxona va talabalar shaharchasining haqiqiy suratlari hamda har bir bo‘lim bo‘yicha batafsil ma’lumotlar.",
     updatedAt: row.updated_at
   };
 }

@@ -6,10 +6,12 @@ import {
   getAnnouncements,
   getAvailableImages,
   getFaqItems,
+  getGalleryCategories,
   getGalleryPhotos,
   getHomepageSettings,
   getOrCreateSupportChat,
   getPublicDormRooms,
+  getSiteBottomTexts,
   getStudentPortalData,
   normalizePhoneKey
 } from "../db/database.js";
@@ -24,6 +26,8 @@ router.get("/rooms", (_request, response) => {
     dormRooms: getPublicDormRooms(),
     announcements: getAnnouncements(),
     gallery: getGalleryPhotos(),
+    galleryCategories: getGalleryCategories(),
+    bottomTexts: getSiteBottomTexts(),
     availableImages: getAvailableImages(),
     homepage: getHomepageSettings(),
     faqs: getFaqItems()
@@ -35,12 +39,17 @@ router.get("/faqs", (_request, response) => {
 });
 
 router.get("/homepage", (_request, response) => {
-  return response.json({ homepage: getHomepageSettings() });
+  return response.json({
+    homepage: getHomepageSettings(),
+    bottomTexts: getSiteBottomTexts()
+  });
 });
 
 router.get("/gallery", (_request, response) => {
   return response.json({
     gallery: getGalleryPhotos(),
+    galleryCategories: getGalleryCategories(),
+    bottomTexts: getSiteBottomTexts("gallery"),
     availableImages: getAvailableImages()
   });
 });

@@ -21,7 +21,9 @@ public class DormitoryDatabase {
     public final List<MaintenanceRequest> maintenance = new CopyOnWriteArrayList<>();
     public final List<Announcement> announcements = new CopyOnWriteArrayList<>();
     public final List<ContactMessage> messages = new CopyOnWriteArrayList<>();
+    public final List<GalleryCategory> galleryCategories = new CopyOnWriteArrayList<>();
     public final List<GalleryPhoto> gallery = new CopyOnWriteArrayList<>();
+    public final List<SiteBottomText> bottomTexts = new CopyOnWriteArrayList<>();
     public final List<FaqItem> faqs = new CopyOnWriteArrayList<>();
     public final List<SupportChat> chats = new CopyOnWriteArrayList<>();
     public HomepageSettings homepage = new HomepageSettings();
@@ -34,7 +36,9 @@ public class DormitoryDatabase {
     public final AtomicLong maintSeq = new AtomicLong(10);
     public final AtomicLong annSeq = new AtomicLong(10);
     public final AtomicLong msgSeq = new AtomicLong(10);
+    public final AtomicLong galCatSeq = new AtomicLong(10);
     public final AtomicLong galSeq = new AtomicLong(30);
+    public final AtomicLong bottomTextSeq = new AtomicLong(20);
     public final AtomicLong faqSeq = new AtomicLong(20);
     public final AtomicLong chatSeq = new AtomicLong(10);
     public final AtomicLong chatMsgSeq = new AtomicLong(50);
@@ -198,7 +202,13 @@ public class DormitoryDatabase {
                 "Talabalar murojaatlariga asosan 500 Mbit/s tarmoq qamrovi kengaytirildi.",
                 "3 va 4-qavatlar", false);
 
-        // 7. Gallery Photos
+        // 7. Gallery Categories & Photos
+        galleryCategories.add(new GalleryCategory(1L, "rooms", "Xonalar", "2, 4 va 6 kishilik zamonaviy jihozlangan talabalar yotoqxona xonalari.", 1, nowIso()));
+        galleryCategories.add(new GalleryCategory(2L, "study", "Kutubxona", "Sokin mutolaa zallari, kovorking va yuqori tezlikdagi Wi-Fi o‘quv hududlari.", 2, nowIso()));
+        galleryCategories.add(new GalleryCategory(3L, "dining", "Oshxona", "Har bir qavatda zamonaviy maishiy texnikalar bilan jihozlangan oshxona va ovqatlanish maydoni.", 3, nowIso()));
+        galleryCategories.add(new GalleryCategory(4L, "sports", "Sport", "Basketbol maydonchasi, street workout va sog‘lom turmush tarzi uchun sport majmuasi.", 4, nowIso()));
+        galleryCategories.add(new GalleryCategory(5L, "campus", "Kampus", "Tashkent Perfect University bosh korpusi, yashil xiyobon va yotoqxona hovlisi.", 5, nowIso()));
+
         String[][] galData = {
                 {"Yotoqxona Asosiy Binosi", "rooms", "/images/campus-2.jpg", "Bino"},
                 {"4 Kishilik Yotoqxona", "rooms", "/images/room-4.jpg", "4 o‘rin"},
@@ -223,8 +233,17 @@ public class DormitoryDatabase {
         };
         long gid = 1;
         for (String[] g : galData) {
-            gallery.add(new GalleryPhoto(gid++, g[0], g[1], g[2], g[3], nowIso()));
+            gallery.add(new GalleryPhoto(gid++, g[0], g[1], g[2], g[3], g[0] + " — Tashkent Perfect University talabalar turar joyi majmuasi.", nowIso()));
         }
+
+        bottomTexts.add(new SiteBottomText(1L, "gallery", "100% Haqiqiy Kampus va Xona Suratlari",
+                "Fotogalereyadagi barcha rasmlar Tashkent Perfect University talabalar turar joyi, xonalari va o‘quv korpuslaridan olingan haqiqiy suratlardir.",
+                "Original foto", 1, nowIso()));
+        bottomTexts.add(new SiteBottomText(2L, "gallery", "Barcha Jihozlar va Qulayliklar Tayyor",
+                "Har bir xonada ortopedik to‘shak, shaxsiy o‘qish stoli, kiyim shkafi, konditsioner, markaziy isitish va 500 Mbit/s optik Wi-Fi mavjud.",
+                "To‘liq jihozlangan", 2, nowIso()));
+        bottomTexts.add(new SiteBottomText(3L, "homepage", "Barcha to‘lovlar narx ichida",
+                "Elektr, issiq-sovuq suv va internet oylik to‘lov ichida", "100%", 1, nowIso()));
 
         // 8. Homepage Settings
         homepage.eyebrowBadge = "TPU SMART ACCOMMODATION";
@@ -396,5 +415,59 @@ public class DormitoryDatabase {
                 + "\"createdAt\":" + JsonHelper.quote(c.createdAt) + ","
                 + "\"messages\":" + msgs
                 + "}";
+    }
+
+    public String galleryToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < gallery.size(); i++) {
+            if (i > 0) sb.append(",");
+            GalleryPhoto g = gallery.get(i);
+            sb.append("{")
+                    .append("\"id\":").append(g.id).append(",")
+                    .append("\"title\":").append(JsonHelper.quote(g.title)).append(",")
+                    .append("\"category\":").append(JsonHelper.quote(g.category)).append(",")
+                    .append("\"image\":").append(JsonHelper.quote(g.image)).append(",")
+                    .append("\"tag\":").append(JsonHelper.quote(g.tag)).append(",")
+                    .append("\"description\":").append(JsonHelper.quote(g.description)).append(",")
+                    .append("\"createdAt\":").append(JsonHelper.quote(g.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String galleryCategoriesToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < galleryCategories.size(); i++) {
+            if (i > 0) sb.append(",");
+            GalleryCategory c = galleryCategories.get(i);
+            long count = gallery.stream().filter(g -> c.slug.equals(g.category)).count();
+            sb.append("{")
+                    .append("\"id\":").append(c.id).append(",")
+                    .append("\"slug\":").append(JsonHelper.quote(c.slug)).append(",")
+                    .append("\"name\":").append(JsonHelper.quote(c.name)).append(",")
+                    .append("\"description\":").append(JsonHelper.quote(c.description)).append(",")
+                    .append("\"photoCount\":").append(count)
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String bottomTextsToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < bottomTexts.size(); i++) {
+            if (i > 0) sb.append(",");
+            SiteBottomText b = bottomTexts.get(i);
+            sb.append("{")
+                    .append("\"id\":").append(b.id).append(",")
+                    .append("\"section\":").append(JsonHelper.quote(b.section)).append(",")
+                    .append("\"title\":").append(JsonHelper.quote(b.title)).append(",")
+                    .append("\"content\":").append(JsonHelper.quote(b.content)).append(",")
+                    .append("\"badge\":").append(JsonHelper.quote(b.badge))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
     }
 }

@@ -46,6 +46,12 @@ public class AdminRoutes {
             handleCreateDormRoom(exchange);
         } else if ("/api/admin/upload-image".equals(path) && "POST".equals(method)) {
             handleUploadImage(exchange);
+        } else if ("/api/admin/gallery-categories".equals(path) && "POST".equals(method)) {
+            handleCreateGalleryCategory(exchange);
+        } else if ("/api/admin/gallery".equals(path) && "POST".equals(method)) {
+            handleCreateGalleryPhoto(exchange);
+        } else if ("/api/admin/bottom-texts".equals(path) && "POST".equals(method)) {
+            handleCreateBottomText(exchange);
         } else if ("/api/admin/faqs".equals(path) && "POST".equals(method)) {
             handleCreateFaq(exchange);
         } else if (path.startsWith("/api/admin/faqs/") && "DELETE".equals(method)) {
@@ -78,9 +84,54 @@ public class AdminRoutes {
 
         JsonHelper.sendJson(exchange, 200, "{"
                 + "\"rooms\":" + roomsJson + ","
+                + "\"gallery\":" + db.galleryToJson() + ","
+                + "\"galleryCategories\":" + db.galleryCategoriesToJson() + ","
+                + "\"bottomTexts\":" + db.bottomTextsToJson() + ","
                 + "\"chats\":" + chatsJson + ","
                 + "\"availableImages\":" + JsonHelper.stringListJson(db.getAvailableImages())
                 + "}");
+    }
+
+    private void handleCreateGalleryCategory(HttpExchange exchange) throws IOException {
+        String body = JsonHelper.readBody(exchange);
+        String name = JsonHelper.getString(body, "name", "").trim();
+        String description = JsonHelper.getString(body, "description", "").trim();
+        if (name.isEmpty()) {
+            JsonHelper.sendError(exchange, 400, "Bo‘lim nomini kiriting.");
+            return;
+        }
+        String slug = name.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
+        if (slug.isEmpty()) slug = "section-" + System.currentTimeMillis();
+        long id = db.galCatSeq.incrementAndGet();
+        db.galleryCategories.add(new GalleryCategory(id, slug, name, description, db.galleryCategories.size() + 1, DormitoryDatabase.nowIso()));
+        JsonHelper.sendJson(exchange, 201, "{\"galleryCategories\":" + db.galleryCategoriesToJson() + "}");
+    }
+
+    private void handleCreateGalleryPhoto(HttpExchange exchange) throws IOException {
+        String body = JsonHelper.readBody(exchange);
+        String title = JsonHelper.getString(body, "title", "").trim();
+        String category = JsonHelper.getString(body, "category", "rooms").trim();
+        String tag = JsonHelper.getString(body, "tag", "Yotoqxona").trim();
+        String description = JsonHelper.getString(body, "description", "").trim();
+        String imageData = JsonHelper.getString(body, "imageData", null);
+        String imageUrl = JsonHelper.getString(body, "imageUrl", "/images/room3.jpeg");
+        String finalImg = (imageData != null && !imageData.isBlank())
+                ? AuthService.saveUploadedImage(db.projectRoot, imageData, "gallery")
+                : imageUrl;
+        long id = db.galSeq.incrementAndGet();
+        db.gallery.add(0, new GalleryPhoto(id, title, category, finalImg != null ? finalImg : "/images/room3.jpeg", tag, description, DormitoryDatabase.nowIso()));
+        JsonHelper.sendJson(exchange, 201, "{\"gallery\":" + db.galleryToJson() + ",\"galleryCategories\":" + db.galleryCategoriesToJson() + "}");
+    }
+
+    private void handleCreateBottomText(HttpExchange exchange) throws IOException {
+        String body = JsonHelper.readBody(exchange);
+        String section = JsonHelper.getString(body, "section", "gallery").trim();
+        String title = JsonHelper.getString(body, "title", "").trim();
+        String content = JsonHelper.getString(body, "content", "").trim();
+        String badge = JsonHelper.getString(body, "badge", "").trim();
+        long id = db.bottomTextSeq.incrementAndGet();
+        db.bottomTexts.add(new SiteBottomText(id, section, title, content, badge, db.bottomTexts.size() + 1, DormitoryDatabase.nowIso()));
+        JsonHelper.sendJson(exchange, 201, "{\"bottomTexts\":" + db.bottomTextsToJson() + "}");
     }
 
     private void handleCreateRoomType(HttpExchange exchange) throws IOException {

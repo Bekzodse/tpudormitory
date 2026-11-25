@@ -63,6 +63,8 @@ export default function App() {
   const [publicDormRooms, setPublicDormRooms] = useState([]);
   const [publicAnnouncements, setPublicAnnouncements] = useState([]);
   const [publicGallery, setPublicGallery] = useState(galleryItems);
+  const [publicGalleryCategories, setPublicGalleryCategories] = useState([]);
+  const [publicBottomTexts, setPublicBottomTexts] = useState([]);
   const [publicHomepage, setPublicHomepage] = useState(null);
   const [publicFaqs, setPublicFaqs] = useState(faqs);
 
@@ -132,6 +134,8 @@ export default function App() {
         if (Array.isArray(data?.dormRooms)) setPublicDormRooms(data.dormRooms);
         if (Array.isArray(data?.announcements)) setPublicAnnouncements(data.announcements);
         if (Array.isArray(data?.gallery) && data.gallery.length > 0) setPublicGallery(data.gallery);
+        if (Array.isArray(data?.galleryCategories)) setPublicGalleryCategories(data.galleryCategories);
+        if (Array.isArray(data?.bottomTexts)) setPublicBottomTexts(data.bottomTexts);
         if (data?.homepage) setPublicHomepage(data.homepage);
         if (Array.isArray(data?.faqs) && data.faqs.length > 0) setPublicFaqs(data.faqs);
       })
@@ -377,6 +381,10 @@ export default function App() {
         ) : activeView === "gallery" ? (
           <GalleryPage
             items={filteredGallery}
+            allItems={publicGallery}
+            categories={publicGalleryCategories}
+            bottomTexts={publicBottomTexts.filter((b) => b.section === "gallery")}
+            homepage={publicHomepage}
             totalCount={publicGallery.length}
             category={galleryFilter}
             setCategory={setGalleryFilter}
@@ -407,6 +415,7 @@ export default function App() {
           <HomePage
             rooms={rooms}
             homepage={publicHomepage}
+            bottomTexts={publicBottomTexts.filter((b) => b.section === "homepage")}
             openBookingModal={openBookingModal}
             navigateTo={navigateTo}
             heroSearchType={heroSearchType}
@@ -422,6 +431,7 @@ export default function App() {
       {activeView !== "home" && (
         <Footer
           rooms={rooms}
+          homepage={publicHomepage}
           navigateTo={navigateTo}
           setRoomFilter={setRoomFilter}
           openBookingModal={openBookingModal}

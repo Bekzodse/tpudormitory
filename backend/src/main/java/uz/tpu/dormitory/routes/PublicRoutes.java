@@ -54,6 +54,9 @@ public class PublicRoutes {
 
         JsonHelper.sendJson(exchange, 200, "{"
                 + "\"rooms\":" + roomsJson + ","
+                + "\"gallery\":" + db.galleryToJson() + ","
+                + "\"galleryCategories\":" + db.galleryCategoriesToJson() + ","
+                + "\"bottomTexts\":" + db.bottomTextsToJson() + ","
                 + "\"faqs\":" + faqsJson + ","
                 + "\"availableImages\":" + JsonHelper.stringListJson(db.getAvailableImages())
                 + "}");

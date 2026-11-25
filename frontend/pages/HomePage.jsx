@@ -9,6 +9,7 @@ import { heroCampusPhotos } from "../data/dormData";
 export default function HomePage({
   rooms = [],
   homepage,
+  bottomTexts = [],
   openBookingModal,
   navigateTo,
   heroSearchType,
@@ -194,26 +195,28 @@ export default function HomePage({
 
       <section className="marquee-section" aria-label="Afzalliklar satri">
         <div className="marquee-track">
-          <div className="marquee-content">
-            <span className="marquee-item"><CheckCircle2 size={16} /> Barcha to‘lovlar narx ichida</span>
-            <span className="marquee-item"><Wifi size={16} /> 500 Mbit/s Tezkor Wi-Fi</span>
-            <span className="marquee-item"><ShieldCheck size={16} /> 24/7 Smart Face ID</span>
-            <span className="marquee-item"><WashingMachine size={16} /> Bepul kir yuvish majmuasi</span>
-            <span className="marquee-item"><BookOpen size={16} /> Sokin kutubxona va kovorking</span>
-            <span className="marquee-item"><Dumbbell size={16} /> Fitness zali & Street Workout</span>
-            <span className="marquee-item"><Utensils size={16} /> Har bir qavatda oshxona</span>
-            <span className="marquee-item"><MapPin size={16} /> Universitetgacha 3 daqiqa</span>
-          </div>
-          <div className="marquee-content" aria-hidden="true">
-            <span className="marquee-item"><CheckCircle2 size={16} /> Barcha to‘lovlar narx ichida</span>
-            <span className="marquee-item"><Wifi size={16} /> 500 Mbit/s Tezkor Wi-Fi</span>
-            <span className="marquee-item"><ShieldCheck size={16} /> 24/7 Smart Face ID</span>
-            <span className="marquee-item"><WashingMachine size={16} /> Bepul kir yuvish majmuasi</span>
-            <span className="marquee-item"><BookOpen size={16} /> Sokin kutubxona va kovorking</span>
-            <span className="marquee-item"><Dumbbell size={16} /> Fitness zali & Street Workout</span>
-            <span className="marquee-item"><Utensils size={16} /> Har bir qavatda oshxona</span>
-            <span className="marquee-item"><MapPin size={16} /> Universitetgacha 3 daqiqa</span>
-          </div>
+          {[0, 1].map((dupIdx) => (
+            <div className="marquee-content" key={dupIdx} aria-hidden={dupIdx === 1 ? "true" : undefined}>
+              {Array.isArray(bottomTexts) && bottomTexts.length > 0 ? (
+                bottomTexts.map((bt) => (
+                  <span className="marquee-item" key={`${dupIdx}-${bt.id}`}>
+                    <CheckCircle2 size={16} /> {bt.title}
+                  </span>
+                ))
+              ) : (
+                <>
+                  <span className="marquee-item"><CheckCircle2 size={16} /> Barcha to‘lovlar narx ichida</span>
+                  <span className="marquee-item"><Wifi size={16} /> 500 Mbit/s Tezkor Wi-Fi</span>
+                  <span className="marquee-item"><ShieldCheck size={16} /> 24/7 Smart Face ID</span>
+                  <span className="marquee-item"><WashingMachine size={16} /> Bepul kir yuvish majmuasi</span>
+                  <span className="marquee-item"><BookOpen size={16} /> Sokin kutubxona va kovorking</span>
+                  <span className="marquee-item"><Dumbbell size={16} /> Fitness zali & Street Workout</span>
+                  <span className="marquee-item"><Utensils size={16} /> Har bir qavatda oshxona</span>
+                  <span className="marquee-item"><MapPin size={16} /> Universitetgacha 3 daqiqa</span>
+                </>
+              )}
+            </div>
+          ))}
         </div>
       </section>
     </>

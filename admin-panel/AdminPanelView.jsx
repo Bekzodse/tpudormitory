@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays, CreditCard, DoorOpen, Download,
-  Globe, LayoutDashboard, Megaphone, MessageSquare, Plus, Users, Wrench
+  Globe, Image as ImageIcon, LayoutDashboard, Megaphone, MessageSquare, Plus, Users, Wrench
 } from "lucide-react";
 import DashboardView from "../dashboard/DashboardView";
 import AdminSidebar from "./AdminSidebar";
@@ -26,7 +26,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
   const [overview, setOverview] = useState({
     rooms: [], bookings: [], students: [], messages: [],
     dormRooms: [], residents: [], maintenance: [], announcements: [],
-    gallery: [], availableImages: [], homepage: null, faqs: [], chats: []
+    gallery: [], galleryCategories: [], bottomTexts: [],
+    availableImages: [], homepage: null, faqs: [], chats: []
   });
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [roomEdits, setRoomEdits] = useState({});
@@ -90,7 +91,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
         rooms: data.rooms || [], bookings: data.bookings || [], students: data.students || [],
         messages: data.messages || [], dormRooms: data.dormRooms || [], residents: data.residents || [],
         maintenance: data.maintenance || [], announcements: data.announcements || [],
-        gallery: data.gallery || [], availableImages: data.availableImages || [],
+        gallery: data.gallery || [], galleryCategories: data.galleryCategories || [],
+        bottomTexts: data.bottomTexts || [], availableImages: data.availableImages || [],
         homepage: data.homepage || null, faqs: data.faqs || [], chats: data.chats || []
       });
       const edits = {};
@@ -340,7 +342,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     { id: "payments", label: "To‘lovlar va moliya", icon: CreditCard, badge: totals.overduePayCount || null, tone: totals.overduePayCount ? "is-alert" : "" },
     { id: "maintenance", label: "Texnik xizmat", icon: Wrench, badge: totals.openMaintCount || null, tone: totals.openMaintCount ? "is-warn" : "" },
     { id: "announcements", label: "E’lonlar va Xabarlar", icon: Megaphone, badge: overview.announcements.length + overview.messages.length },
-    { id: "siteContent", label: "Bosh sahifa & FAQ", icon: Globe, badge: (overview.faqs || []).length || null }
+    { id: "galleryManager", label: "Fotogalereya & Bo‘limlar", icon: ImageIcon, badge: (overview.gallery || []).length || null },
+    { id: "siteContent", label: "Bosh sahifa, Gaplar & FAQ", icon: Globe, badge: (overview.faqs || []).length || null }
   ];
 
   const sectionMeta = {
@@ -352,7 +355,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     payments: { title: "Oylik To‘lovlar va Moliya Nazorati", subtitle: "Yotoqxona tushum rejasini kuzating, to‘lovlarni tasdiqlang va qarzdorlarga eslatma yuboring." },
     maintenance: { title: "Texnik Xizmat va Ta’mirlash", subtitle: "Xonalardagi santexnika, elektr, konditsioner va Wi-Fi nosozliklarini qayd eting va hal qiling." },
     announcements: { title: "E’lonlar, Portal Akkauntlari va Xabarlar", subtitle: "Talabalar kabinetiga muhim e’lonlar joylang hamda saytdan kelgan murojaatlarni ko‘ring." },
-    siteContent: { title: "Bosh Sahifa Matnlari, Rasmlari va Savol-Javoblar", subtitle: "Bosh sahifadagi sarlavhalar, 4 ta Hero rasmi hamda Savol-Javob (FAQ) bo‘limini to‘liq boshqaring." }
+    galleryManager: { title: "Fotogalereya Bo‘limlari, Rasmlari va Pastki Gaplar", subtitle: "Fotogalereyada yangi bo‘limlar yarating, bo‘limlarga rasm va rasm ostidagi gaplarni qo‘shing." },
+    siteContent: { title: "Bosh Sahifa Matnlari, Rasmlari, Pastki Gaplar va Savol-Javoblar", subtitle: "Bosh sahifadagi sarlavhalar, 4 ta Hero rasmi, pastdagi gaplar hamda Savol-Javob (FAQ) bo‘limini boshqaring." }
   };
 
   return (
@@ -438,7 +442,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
           {section === "payments" && <AdminPaymentsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onEditResident={openEditResidentModal} showToast={showToast} />}
           {section === "maintenance" && <AdminMaintenanceSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} />}
           {section === "announcements" && <AdminCommunitySection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} onEditAccount={openEditAccountModal} onNewAccount={openNewAccountModal} onEditAnnouncement={openEditAnnouncementModal} showToast={showToast} />}
-          {section === "siteContent" && <AdminSiteContentSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} showToast={showToast} />}
+          {section === "galleryManager" && <AdminSiteContentSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} showToast={showToast} initialTab="gallery" />}
+          {section === "siteContent" && <AdminSiteContentSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} showToast={showToast} initialTab="homepage" />}
         </main>
       </div>
 

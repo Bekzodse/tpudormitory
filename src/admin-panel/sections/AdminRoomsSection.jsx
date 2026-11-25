@@ -33,7 +33,9 @@ export default function AdminRoomsSection({
   const [galleryForm, setGalleryForm] = useState({
     title: "",
     category: "rooms",
+    newCategoryName: "",
     tag: "Yotoqxona",
+    description: "",
     imageData: "",
     imageUrl: "/images/room3.jpeg"
   });
@@ -88,12 +90,24 @@ export default function AdminRoomsSection({
     e.preventDefault();
     const ok = await runAdminRequest({
       url: "/api/admin/gallery",
-      body: galleryForm,
+      body: {
+        ...galleryForm,
+        category: galleryForm.category === "__new__" ? "rooms" : galleryForm.category,
+        newCategoryName: galleryForm.category === "__new__" ? galleryForm.newCategoryName : ""
+      },
       busyKey: "add-gallery",
-      successMsg: "Yangi rasm fotogalereyaga qo‘shildi!"
+      successMsg: "Yangi rasm va pastki gap fotogalereyaga qo‘shildi!"
     });
     if (ok) {
-      setGalleryForm({ title: "", category: "rooms", tag: "Yotoqxona", imageData: "", imageUrl: "/images/room3.jpeg" });
+      setGalleryForm({
+        title: "",
+        category: "rooms",
+        newCategoryName: "",
+        tag: "Yotoqxona",
+        description: "",
+        imageData: "",
+        imageUrl: "/images/room3.jpeg"
+      });
     }
   };
 
@@ -486,17 +500,40 @@ export default function AdminRoomsSection({
               value={galleryForm.category}
               onChange={(e) => setGalleryForm((p) => ({ ...p, category: e.target.value }))}
             >
-              <option value="rooms">Xonalar</option>
-              <option value="study">Kutubxona</option>
-              <option value="dining">Oshxona</option>
-              <option value="sports">Sport</option>
-              <option value="campus">Kampus</option>
+              {(overview.galleryCategories && overview.galleryCategories.length > 0
+                ? overview.galleryCategories
+                : [
+                    { slug: "rooms", name: "Xonalar" },
+                    { slug: "study", name: "Kutubxona" },
+                    { slug: "dining", name: "Oshxona" },
+                    { slug: "sports", name: "Sport" },
+                    { slug: "campus", name: "Kampus" }
+                  ]
+              ).map((c) => (
+                <option key={c.slug} value={c.slug}>{c.name}</option>
+              ))}
+              <option value="__new__">+ Yangi bo‘lim yaratish...</option>
             </select>
+            {galleryForm.category === "__new__" && (
+              <input
+                required
+                type="text"
+                placeholder="Yangi bo‘lim nomi..."
+                value={galleryForm.newCategoryName}
+                onChange={(e) => setGalleryForm((p) => ({ ...p, newCategoryName: e.target.value }))}
+              />
+            )}
             <input
               type="text"
               placeholder="Teg (masalan: 2 o‘rin)"
               value={galleryForm.tag}
               onChange={(e) => setGalleryForm((p) => ({ ...p, tag: e.target.value }))}
+            />
+            <input
+              type="text"
+              placeholder="Rasm pastidagi gap / izoh..."
+              value={galleryForm.description}
+              onChange={(e) => setGalleryForm((p) => ({ ...p, description: e.target.value }))}
             />
             <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
               <Camera size={14} />
