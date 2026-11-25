@@ -1,11 +1,16 @@
 import { Router } from "express";
 import {
   db,
+  formatPriceUzs,
   formatRoomInventory,
   getAdminDormRooms,
   getAdminMaintenance,
   getAdminResidents,
-  getAnnouncements
+  getAnnouncements,
+  getAvailableImages,
+  getGalleryPhotos,
+  parsePriceDigits,
+  saveUploadedImage
 } from "../db/database.js";
 import { createRequireAdmin, decryptSecret, encryptSecret, hashPassword, publicStudent } from "../utils/auth.js";
 
@@ -85,8 +90,56 @@ router.get("/overview", (_request, response) => {
     dormRooms: getAdminDormRooms(),
     residents: residentsList,
     maintenance: getAdminMaintenance(),
-    announcements: getAnnouncements()
+    announcements: getAnnouncements(),
+    gallery: getGalleryPhotos(),
+    availableImages: getAvailableImages()
   });
+});
+
+router.post("/upload-image", (request, response) => {
+  const { imageData, prefix = "room", addToGallery = false, title = "Yangi rasm", category = "rooms", tag = "Yotoqxona" } = request.body;
+  if (!imageData) return response.status(400).json({ message: "Rasm ma’lumotlari yuborilmadi." });
+  const imageUrl = saveUploadedImage(imageData, prefix);
+  if (!imageUrl) return response.status(400).json({ message: "Rasm formati noto‘g‘ri." });
+
+  if (addToGallery) {
+    db.prepare(`
+      INSERT INTO gallery_photos (title, category, image, tag)
+      VALUES (?, ?, ?, ?)
+    `).run(String(title).trim() || "Yotoqxona surati", String(category).trim() || "rooms", imageUrl, String(tag).trim() || "Yotoqxona");
+  }
+
+  return response.status(201).json({
+    imageUrl,
+    availableImages: getAvailableImages(),
+    gallery: getGalleryPhotos(),
+    message: "Rasm serverga muvaffaqiyatli saqlandi!"
+  });
+});
+
+router.post("/gallery", (request, response) => {
+  const { title, category = "rooms", tag = "Yotoqxona", imageData, imageUrl } = request.body;
+  const cleanTitle = String(title || "").trim();
+  const savedImg = imageData ? saveUploadedImage(imageData, "gallery") : String(imageUrl || "").trim();
+  if (!cleanTitle || !savedImg) {
+    return response.status(400).json({ message: "Rasm nomi va faylini kiriting." });
+  }
+  db.prepare(`
+    INSERT INTO gallery_photos (title, category, image, tag)
+    VALUES (?, ?, ?, ?)
+  `).run(cleanTitle, String(category).trim() || "rooms", savedImg, String(tag).trim() || "Yotoqxona");
+
+  return response.status(201).json({
+    gallery: getGalleryPhotos(),
+    availableImages: getAvailableImages(),
+    message: "Rasm fotogalereyaga qo‘shildi!"
+  });
+});
+
+router.delete("/gallery/:id", (request, response) => {
+  const res = db.prepare("DELETE FROM gallery_photos WHERE id = ?").run(Number(request.params.id));
+  if (!res.changes) return response.status(404).json({ message: "Rasm topilmadi." });
+  return response.json({ gallery: getGalleryPhotos() });
 });
 
 router.patch("/bookings/:id", (request, response) => {
@@ -219,27 +272,258 @@ router.delete("/bookings/:id", (request, response) => {
   return response.json({ rooms, dormRooms: getAdminDormRooms(), residents: getAdminResidents() });
 });
 
+router.post("/rooms", (request, response) => {
+  const {
+    title,
+    price,
+    spotsPerRoom = 2,
+    totalRooms = 10,
+    occupiedSpots = 0,
+    floor = "4-qavat",
+    size = "28 m²",
+    bathroom = "Xona ichida shaxsiy sanuzel",
+    tag = "Yangi tur",
+    badgeType = "recommended",
+    image,
+    gallery,
+    description,
+    features,
+    amenities,
+    initialRoomNumber
+  } = request.body;
+
+  const cleanTitle = String(title || "").trim();
+  const rawPrice = String(price || "").trim();
+  const priceNum = parsePriceDigits(rawPrice);
+  if (!cleanTitle || !priceNum) {
+    return response.status(400).json({ message: "Xona turi nomi va oylik narxini kiriting." });
+  }
+
+  const formattedPrice = rawPrice.includes("so") ? rawPrice : formatPriceUzs(priceNum);
+  const cleanSpots = Math.max(1, Math.min(12, Math.round(Number(spotsPerRoom) || 2)));
+  const cleanTotalRooms = Math.max(1, Math.min(500, Math.round(Number(totalRooms) || 10)));
+  const maxSpots = cleanTotalRooms * cleanSpots;
+  const cleanOccupied = Math.max(0, Math.min(maxSpots, Math.round(Number(occupiedSpots) || 0)));
+  const savedImage = saveUploadedImage(image, "roomtype") || "/images/room3.jpeg";
+
+  const galleryArr = Array.isArray(gallery) && gallery.length > 0
+    ? gallery.map((img) => saveUploadedImage(img, "roomtype") || img).filter(Boolean)
+    : [savedImage];
+  if (!galleryArr.includes(savedImage)) galleryArr.unshift(savedImage);
+
+  const featuresArr = Array.isArray(features)
+    ? features
+    : String(features || "Wi-Fi 500 Mbps, O‘qish stoli, Konditsioner, Kunlik tozalash")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+  const amenitiesArr = Array.isArray(amenities)
+    ? amenities
+    : String(amenities || `${cleanSpots} ta ortopedik karavot, 500 Mbit/s Wi-Fi, Markaziy isitish, Kunlik tozalash`)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+  const categorySlug = `type_${Date.now().toString(36)}`;
+  const cleanDesc = String(description || "").trim() || `${cleanSpots} kishilik barcha qulayliklarga ega zamonaviy talabalar xonasi.`;
+
+  const res = db.prepare(`
+    INSERT INTO room_inventory (
+      category, title, price, price_num, total_rooms, spots_per_room, occupied_spots,
+      people, tag, badge_type, floor, size, bathroom, image, gallery_json, description, amenities_json, features_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    categorySlug,
+    cleanTitle,
+    formattedPrice,
+    priceNum,
+    cleanTotalRooms,
+    cleanSpots,
+    cleanOccupied,
+    `${cleanSpots} o‘rin`,
+    String(tag || "Yangi").trim(),
+    ["recommended", "popular", "budget", "exclusive"].includes(badgeType) ? badgeType : "recommended",
+    String(floor || "4-qavat").trim(),
+    String(size || "26 m²").trim(),
+    String(bathroom || "Shaxsiy sanuzel").trim(),
+    savedImage,
+    JSON.stringify(galleryArr),
+    cleanDesc,
+    JSON.stringify(amenitiesArr),
+    JSON.stringify(featuresArr)
+  );
+
+  const newTypeId = res.lastInsertRowid;
+  if (initialRoomNumber && String(initialRoomNumber).trim()) {
+    const cleanNum = String(initialRoomNumber).trim();
+    const parsedFloor = parseInt(String(floor).replace(/\D/g, ""), 10) || 4;
+    if (!db.prepare("SELECT id FROM dorm_rooms WHERE room_number = ?").get(cleanNum)) {
+      db.prepare(`
+        INSERT INTO dorm_rooms (room_number, room_type_id, room_category, floor, capacity, status, custom_price, image, description)
+        VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)
+      `).run(cleanNum, newTypeId, categorySlug, parsedFloor, cleanSpots, formattedPrice, savedImage, cleanDesc);
+    }
+  }
+
+  db.prepare(`
+    INSERT INTO gallery_photos (title, category, image, tag)
+    VALUES (?, 'rooms', ?, ?)
+  `).run(cleanTitle, savedImage, `${cleanSpots} o‘rin`);
+
+  const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
+  return response.status(201).json({
+    rooms,
+    dormRooms: getAdminDormRooms(),
+    gallery: getGalleryPhotos(),
+    availableImages: getAvailableImages(),
+    message: "Yangi xona turi, narxi va rasmi qo‘shildi!"
+  });
+});
+
 router.put("/rooms/:id", (request, response) => {
   const roomId = Number(request.params.id);
-  const { totalRooms, occupiedSpots } = request.body;
+  const {
+    totalRooms,
+    occupiedSpots,
+    title,
+    price,
+    spotsPerRoom,
+    floor,
+    size,
+    bathroom,
+    tag,
+    badgeType,
+    image,
+    gallery,
+    description,
+    features,
+    amenities
+  } = request.body;
   const inv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(roomId);
   if (!inv) return response.status(404).json({ message: "Xona turi topilmadi." });
 
+  const nextSpotsPerRoom = spotsPerRoom !== undefined
+    ? Math.max(1, Math.min(12, Math.round(Number(spotsPerRoom) || inv.spots_per_room)))
+    : inv.spots_per_room;
   const nextTotalRooms = Math.max(1, Math.min(500, Math.round(Number(totalRooms ?? inv.total_rooms))));
-  const maxSpots = nextTotalRooms * inv.spots_per_room;
+  const maxSpots = nextTotalRooms * nextSpotsPerRoom;
   const nextOccupied = Math.max(0, Math.min(maxSpots, Math.round(Number(occupiedSpots ?? inv.occupied_spots))));
 
-  db.prepare("UPDATE room_inventory SET total_rooms = ?, occupied_spots = ? WHERE id = ?").run(
+  const nextTitle = title !== undefined && String(title).trim() ? String(title).trim() : inv.title;
+  let nextPrice = inv.price;
+  let nextPriceNum = inv.price_num || parsePriceDigits(inv.price);
+  if (price !== undefined && String(price).trim()) {
+    const rawP = String(price).trim();
+    const digits = parsePriceDigits(rawP);
+    if (digits > 0) {
+      nextPriceNum = digits;
+      nextPrice = rawP.includes("so") ? rawP : formatPriceUzs(digits);
+    }
+  }
+
+  const nextImage = image !== undefined && String(image).trim()
+    ? (saveUploadedImage(image, "roomtype") || inv.image)
+    : inv.image;
+
+  let nextGalleryJson = inv.gallery_json;
+  if (gallery !== undefined) {
+    const arr = Array.isArray(gallery)
+      ? gallery.map((g) => saveUploadedImage(g, "roomtype") || g).filter(Boolean)
+      : [nextImage];
+    if (!arr.includes(nextImage)) arr.unshift(nextImage);
+    nextGalleryJson = JSON.stringify(arr);
+  } else if (image !== undefined && nextImage) {
+    const existingGal = (() => {
+      try { return JSON.parse(inv.gallery_json || "[]"); } catch { return []; }
+    })();
+    const updatedGal = [nextImage, ...existingGal.filter((g) => g !== nextImage)];
+    nextGalleryJson = JSON.stringify(updatedGal);
+  }
+
+  let nextFeaturesJson = inv.features_json;
+  if (features !== undefined) {
+    const fArr = Array.isArray(features)
+      ? features
+      : String(features).split(",").map((s) => s.trim()).filter(Boolean);
+    if (fArr.length > 0) nextFeaturesJson = JSON.stringify(fArr);
+  }
+
+  let nextAmenitiesJson = inv.amenities_json;
+  if (amenities !== undefined) {
+    const aArr = Array.isArray(amenities)
+      ? amenities
+      : String(amenities).split(",").map((s) => s.trim()).filter(Boolean);
+    if (aArr.length > 0) nextAmenitiesJson = JSON.stringify(aArr);
+  }
+
+  const nextFloor = floor !== undefined ? String(floor).trim() || inv.floor : inv.floor;
+  const nextSize = size !== undefined ? String(size).trim() || inv.size : inv.size;
+  const nextBathroom = bathroom !== undefined ? String(bathroom).trim() || inv.bathroom : inv.bathroom;
+  const nextTag = tag !== undefined ? String(tag).trim() || inv.tag : inv.tag;
+  const nextBadgeType = badgeType !== undefined && ["recommended", "popular", "budget", "exclusive"].includes(badgeType)
+    ? badgeType
+    : inv.badge_type;
+  const nextDesc = description !== undefined ? String(description).trim() || inv.description : inv.description;
+
+  db.prepare(`
+    UPDATE room_inventory
+    SET total_rooms = ?, occupied_spots = ?, spots_per_room = ?, people = ?,
+        title = ?, price = ?, price_num = ?, floor = ?, size = ?, bathroom = ?,
+        tag = ?, badge_type = ?, image = ?, gallery_json = ?, description = ?,
+        features_json = ?, amenities_json = ?
+    WHERE id = ?
+  `).run(
     nextTotalRooms,
     nextOccupied,
+    nextSpotsPerRoom,
+    `${nextSpotsPerRoom} o‘rin`,
+    nextTitle,
+    nextPrice,
+    nextPriceNum,
+    nextFloor,
+    nextSize,
+    nextBathroom,
+    nextTag,
+    nextBadgeType,
+    nextImage,
+    nextGalleryJson,
+    nextDesc,
+    nextFeaturesJson,
+    nextAmenitiesJson,
     roomId
   );
 
-  return response.json({ room: formatRoomInventory(db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(roomId)) });
+  const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
+  return response.json({
+    room: formatRoomInventory(db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(roomId)),
+    rooms,
+    dormRooms: getAdminDormRooms(),
+    availableImages: getAvailableImages()
+  });
+});
+
+router.delete("/rooms/:id", (request, response) => {
+  const roomId = Number(request.params.id);
+  const inv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(roomId);
+  if (!inv) return response.status(404).json({ message: "Xona turi topilmadi." });
+
+  const linkedRooms = db.prepare("SELECT id FROM dorm_rooms WHERE room_type_id = ?").all(roomId);
+  for (const lr of linkedRooms) {
+    const occ = db.prepare("SELECT COUNT(*) AS cnt FROM room_residents WHERE dorm_room_id = ?").get(lr.id)?.cnt || 0;
+    if (occ > 0) {
+      return response.status(409).json({ message: "Ushbu xona turiga mansub xonalarda yashovchi talabalar bor." });
+    }
+  }
+  db.prepare("DELETE FROM dorm_rooms WHERE room_type_id = ?").run(roomId);
+  db.prepare("DELETE FROM room_inventory WHERE id = ?").run(roomId);
+  const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
+  return response.json({ rooms, dormRooms: getAdminDormRooms() });
 });
 
 router.post("/dorm-rooms", (request, response) => {
-  const { roomNumber, roomTypeId, floor, status = "active" } = request.body;
+  const { roomNumber, roomTypeId, floor, status = "active", customPrice, image, description } = request.body;
   const cleanNumber = String(roomNumber || "").trim();
   const inv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(Number(roomTypeId));
   const cleanFloor = Number(floor);
@@ -250,17 +534,40 @@ router.post("/dorm-rooms", (request, response) => {
     return response.status(409).json({ message: `${cleanNumber}-xona allaqachon mavjud.` });
   }
 
-  db.prepare(`
-    INSERT INTO dorm_rooms (room_number, room_type_id, room_category, floor, capacity, status)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(cleanNumber, inv.id, inv.category, cleanFloor, inv.spots_per_room, status === "maintenance" ? "maintenance" : "active");
+  let formattedCustomPrice = null;
+  if (customPrice && String(customPrice).trim()) {
+    const rawCp = String(customPrice).trim();
+    const digits = parsePriceDigits(rawCp);
+    formattedCustomPrice = digits > 0 ? (rawCp.includes("so") ? rawCp : formatPriceUzs(digits)) : rawCp;
+  }
 
-  return response.status(201).json({ dormRooms: getAdminDormRooms() });
+  const savedImage = image ? saveUploadedImage(image, `room-${cleanNumber}`) : (inv.image || "/images/room3.jpeg");
+  const cleanDesc = description !== undefined ? String(description).trim() : (inv.description || "");
+
+  db.prepare(`
+    INSERT INTO dorm_rooms (room_number, room_type_id, room_category, floor, capacity, status, custom_price, image, description)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    cleanNumber,
+    inv.id,
+    inv.category,
+    cleanFloor,
+    inv.spots_per_room,
+    status === "maintenance" ? "maintenance" : "active",
+    formattedCustomPrice,
+    savedImage,
+    cleanDesc
+  );
+
+  return response.status(201).json({
+    dormRooms: getAdminDormRooms(),
+    availableImages: getAvailableImages()
+  });
 });
 
 router.patch("/dorm-rooms/:id", (request, response) => {
   const dormRoomId = Number(request.params.id);
-  const { status, roomNumber, floor, roomTypeId } = request.body;
+  const { status, roomNumber, floor, roomTypeId, customPrice, image, description } = request.body;
   const existing = db.prepare("SELECT * FROM dorm_rooms WHERE id = ?").get(dormRoomId);
   if (!existing) return response.status(404).json({ message: "Xona topilmadi." });
 
@@ -293,13 +600,44 @@ router.patch("/dorm-rooms/:id", (request, response) => {
     nextCapacity = inv.spots_per_room;
   }
 
+  let nextCustomPrice = existing.custom_price;
+  if (customPrice !== undefined) {
+    const rawCp = String(customPrice || "").trim();
+    if (!rawCp) {
+      nextCustomPrice = null;
+    } else {
+      const digits = parsePriceDigits(rawCp);
+      nextCustomPrice = digits > 0 ? (rawCp.includes("so") ? rawCp : formatPriceUzs(digits)) : rawCp;
+    }
+  }
+
+  const nextImage = image !== undefined
+    ? (image ? saveUploadedImage(image, `room-${nextNumber}`) : null)
+    : existing.image;
+  const nextDesc = description !== undefined ? String(description).trim() : existing.description;
+
   db.prepare(`
     UPDATE dorm_rooms
-    SET status = ?, room_number = ?, floor = ?, room_type_id = ?, room_category = ?, capacity = ?
+    SET status = ?, room_number = ?, floor = ?, room_type_id = ?, room_category = ?, capacity = ?,
+        custom_price = ?, image = ?, description = ?
     WHERE id = ?
-  `).run(nextStatus, nextNumber, nextFloor, nextTypeId, nextCategory, nextCapacity, dormRoomId);
+  `).run(
+    nextStatus,
+    nextNumber,
+    nextFloor,
+    nextTypeId,
+    nextCategory,
+    nextCapacity,
+    nextCustomPrice,
+    nextImage,
+    nextDesc,
+    dormRoomId
+  );
 
-  return response.json({ dormRooms: getAdminDormRooms() });
+  return response.json({
+    dormRooms: getAdminDormRooms(),
+    availableImages: getAvailableImages()
+  });
 });
 
 router.delete("/dorm-rooms/:id", (request, response) => {

@@ -2,7 +2,7 @@ import React from "react";
 import { CalendarDays, Clock, Instagram, MapPin, Phone, Send } from "lucide-react";
 import TpuLogo from "../common/TpuLogo";
 
-export default function Footer({ navigateTo, setRoomFilter, openBookingModal, showToast }) {
+export default function Footer({ rooms = [], navigateTo, setRoomFilter, openBookingModal, showToast }) {
   return (
     <footer className="footer" id="contact-footer">
       <div className="footer-top section-wrap">
@@ -47,9 +47,20 @@ export default function Footer({ navigateTo, setRoomFilter, openBookingModal, sh
         <div className="footer-col">
           <h4 className="footer-col-title">Xona turlari</h4>
           <ul className="footer-links">
-            <li><a href="#rooms" onClick={(e) => { e.preventDefault(); setRoomFilter("two"); navigateTo("#rooms"); }}>2 kishilik yotoqxona (1 100 000 so‘m)</a></li>
-            <li><a href="#rooms" onClick={(e) => { e.preventDefault(); setRoomFilter("four"); navigateTo("#rooms"); }}>4 kishilik yotoqxona (900 000 so‘m)</a></li>
-            <li><a href="#rooms" onClick={(e) => { e.preventDefault(); setRoomFilter("six"); navigateTo("#rooms"); }}>6 kishilik yotoqxona (800 000 so‘m)</a></li>
+            {rooms.map((r) => (
+              <li key={r.id}>
+                <a
+                  href="#rooms"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setRoomFilter(r.category);
+                    navigateTo("#rooms");
+                  }}
+                >
+                  {r.title.replace(/^\d+\s*\/\s*/, "")} ({r.price})
+                </a>
+              </li>
+            ))}
           </ul>
         </div>
 

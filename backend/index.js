@@ -11,7 +11,7 @@ const app = express();
 
 await initDatabase();
 
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "15mb" }));
 app.use("/api/auth", authRouter);
 app.use("/api", publicRouter);
 app.use("/api/admin", adminRouter);

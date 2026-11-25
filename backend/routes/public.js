@@ -3,6 +3,8 @@ import {
   db,
   formatRoomInventory,
   getAnnouncements,
+  getAvailableImages,
+  getGalleryPhotos,
   getPublicDormRooms,
   getStudentPortalData
 } from "../db/database.js";
@@ -15,7 +17,16 @@ router.get("/rooms", (_request, response) => {
   return response.json({
     rooms: rows.map(formatRoomInventory),
     dormRooms: getPublicDormRooms(),
-    announcements: getAnnouncements()
+    announcements: getAnnouncements(),
+    gallery: getGalleryPhotos(),
+    availableImages: getAvailableImages()
+  });
+});
+
+router.get("/gallery", (_request, response) => {
+  return response.json({
+    gallery: getGalleryPhotos(),
+    availableImages: getAvailableImages()
   });
 });
 

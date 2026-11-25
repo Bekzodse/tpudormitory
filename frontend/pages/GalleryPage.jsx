@@ -2,7 +2,7 @@ import React from "react";
 import { Sparkles } from "lucide-react";
 import { galleryItems } from "../data/dormData";
 
-export default function GalleryPage({ items, category, setCategory, openLightbox }) {
+export default function GalleryPage({ items, totalCount, category, setCategory, openLightbox }) {
   return (
     <div className="page-view-wrap section-wrap">
       <div className="section-header-centered">
@@ -19,7 +19,7 @@ export default function GalleryPage({ items, category, setCategory, openLightbox
             className={`btn-filter ${category === "all" ? "active" : ""}`}
             onClick={() => setCategory("all")}
           >
-            Barchasi ({galleryItems.length})
+            Barchasi ({totalCount ?? galleryItems.length})
           </button>
           <button
             className={`btn-filter ${category === "rooms" ? "active" : ""}`}

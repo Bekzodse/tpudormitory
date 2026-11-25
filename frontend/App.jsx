@@ -61,6 +61,7 @@ export default function App() {
   const [bookingError, setBookingError] = useState("");
   const [publicDormRooms, setPublicDormRooms] = useState([]);
   const [publicAnnouncements, setPublicAnnouncements] = useState([]);
+  const [publicGallery, setPublicGallery] = useState(galleryItems);
 
   // Contact Form State
   const [contactForm, setContactForm] = useState({
@@ -86,18 +87,17 @@ export default function App() {
 
   const syncRoomsFromInventory = (invRooms) => {
     if (!Array.isArray(invRooms) || invRooms.length === 0) return;
-    setRooms((prev) =>
-      prev.map((room) => {
-        const match = invRooms.find((item) => item.category === room.category || item.id === room.id);
-        return match
-          ? {
-              ...room,
-              availableSpots: match.availableSpots,
-              totalRooms: match.totalRooms,
-              totalSpots: match.totalSpots,
-              occupiedSpots: match.occupiedSpots
-            }
-          : room;
+    setRooms(
+      invRooms.map((item) => {
+        const fallback = initialRooms.find((r) => r.id === item.id || r.category === item.category) || initialRooms[0];
+        return {
+          ...fallback,
+          ...item,
+          image: item.image || fallback.image,
+          gallery: Array.isArray(item.gallery) && item.gallery.length > 0 ? item.gallery : [item.image || fallback.image],
+          features: Array.isArray(item.features) && item.features.length > 0 ? item.features : fallback.features,
+          amenities: Array.isArray(item.amenities) && item.amenities.length > 0 ? item.amenities : fallback.amenities
+        };
       })
     );
   };
@@ -109,6 +109,7 @@ export default function App() {
         if (data?.rooms) syncRoomsFromInventory(data.rooms);
         if (Array.isArray(data?.dormRooms)) setPublicDormRooms(data.dormRooms);
         if (Array.isArray(data?.announcements)) setPublicAnnouncements(data.announcements);
+        if (Array.isArray(data?.gallery) && data.gallery.length > 0) setPublicGallery(data.gallery);
       })
       .catch(() => {});
   };
@@ -267,9 +268,9 @@ export default function App() {
   }, [facilityCategory]);
 
   const filteredGallery = useMemo(() => {
-    if (galleryFilter === "all") return galleryItems;
-    return galleryItems.filter((item) => item.category === galleryFilter);
-  }, [galleryFilter]);
+    if (galleryFilter === "all") return publicGallery;
+    return publicGallery.filter((item) => item.category === galleryFilter);
+  }, [publicGallery, galleryFilter]);
 
   const navItems = [
     { label: "Bosh sahifa", href: "#home", view: "home" },
@@ -342,6 +343,7 @@ export default function App() {
         ) : activeView === "gallery" ? (
           <GalleryPage
             items={filteredGallery}
+            totalCount={publicGallery.length}
             category={galleryFilter}
             setCategory={setGalleryFilter}
             openLightbox={setLightboxImage}
@@ -369,6 +371,7 @@ export default function App() {
           />
         ) : (
           <HomePage
+            rooms={rooms}
             openBookingModal={openBookingModal}
             navigateTo={navigateTo}
             heroSearchType={heroSearchType}
@@ -383,6 +386,7 @@ export default function App() {
 
       {activeView !== "home" && (
         <Footer
+          rooms={rooms}
           navigateTo={navigateTo}
           setRoomFilter={setRoomFilter}
           openBookingModal={openBookingModal}

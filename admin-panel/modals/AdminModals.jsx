@@ -1,6 +1,66 @@
-import React from "react";
-import { CreditCard, DoorOpen, Pencil, Plus, Trash2, Users, Wrench, X } from "lucide-react";
-import { PAYMENT_LABELS, STATUS_LABELS } from "../utils/AdminHelpers";
+import React, { useEffect, useState } from "react";
+import { Camera, CreditCard, DoorOpen, Pencil, Plus, Trash2, Users, Wrench, X } from "lucide-react";
+import { PAYMENT_LABELS, readRoomImageFile, STATUS_LABELS } from "../utils/AdminHelpers";
+
+function RoomImagePicker({ value, onChange, availableImages = [], onError }) {
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await readRoomImageFile(file);
+      onChange(dataUrl);
+    } catch (err) {
+      if (onError) onError(err.message);
+    }
+    e.target.value = "";
+  };
+
+  const sampleList = availableImages.length > 0
+    ? availableImages.slice(0, 12)
+    : ["/images/room3.jpeg", "/images/room-4.jpg", "/images/room-6.jpg", "/images/hero-dorm-room.jpeg", "/images/room1.jpeg", "/images/room2.jpeg"];
+
+  return (
+    <div className="admin-image-picker-box is-full">
+      <div className="admin-image-picker-top">
+        <div className="admin-image-picker-preview">
+          <img src={value || "/images/room3.jpeg"} alt="Tanlangan xona rasmi" />
+        </div>
+        <div className="admin-image-picker-controls">
+          <strong>Xona rasmi (Yuklash yoki tanlash)</strong>
+          <small>Kompyuteringizdan yangi rasm yuklang yoki quyidagi tayyor rasmlardan birini bosing.</small>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+            <label className="btn btn-primary btn-sm" style={{ cursor: "pointer" }}>
+              <Camera size={14} />
+              <span>Kompyuterdan rasm yuklash</span>
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+            </label>
+            <input
+              type="text"
+              placeholder="Yoki rasm URL manzili (/images/room3.jpeg)..."
+              value={value?.startsWith("data:") ? "" : (value || "")}
+              onChange={(e) => onChange(e.target.value)}
+              style={{ flex: 1, minWidth: 180, padding: "6px 10px", borderRadius: 10, border: "1.5px solid #d5e5fc", fontSize: 12 }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="admin-image-picker-thumbs">
+        {sampleList.map((imgUrl) => (
+          <button
+            key={imgUrl}
+            type="button"
+            className={`admin-picker-thumb ${value === imgUrl ? "active" : ""}`}
+            onClick={() => onChange(imgUrl)}
+            title={imgUrl}
+          >
+            <img src={imgUrl} alt="Galereya namunasi" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminModals({
   overview,
@@ -15,6 +75,10 @@ export default function AdminModals({
   setRoomModalOpen,
   newRoomForm,
   setNewRoomForm,
+  roomTypeModal,
+  setRoomTypeModal,
+  roomTypeForm,
+  setRoomTypeForm,
   residentModal,
   setResidentModal,
   resForm,
@@ -31,8 +95,31 @@ export default function AdminModals({
   accountModal,
   setAccountModal,
   accountForm,
-  setAccountForm
+  setAccountForm,
+  showToast
 }) {
+  const [inspectEdit, setInspectEdit] = useState({
+    roomNumber: "",
+    floor: "4",
+    roomTypeId: "1",
+    customPrice: "",
+    image: "",
+    description: ""
+  });
+
+  useEffect(() => {
+    if (inspectedRoom) {
+      setInspectEdit({
+        roomNumber: inspectedRoom.roomNumber || "",
+        floor: String(inspectedRoom.floor || 4),
+        roomTypeId: String(inspectedRoom.roomTypeId || 1),
+        customPrice: inspectedRoom.customPrice || inspectedRoom.monthlyPrice || "",
+        image: inspectedRoom.image || "/images/room3.jpeg",
+        description: inspectedRoom.description || ""
+      });
+    }
+  }, [inspectedRoom]);
+
   return (
     <>
       {inspectedRoom && (
@@ -44,10 +131,91 @@ export default function AdminModals({
             <span className="section-kicker">
               <DoorOpen size={14} /> {inspectedRoom.floor}-qavat • {inspectedRoom.capacity} kishilik xona
             </span>
-            <h2 style={{ margin: "6px 0 4px", color: "var(--blue-navy)" }}>{inspectedRoom.roomNumber}-xona tafsilotlari</h2>
+            <h2 style={{ margin: "6px 0 4px", color: "var(--blue-navy)" }}>{inspectedRoom.roomNumber}-xona tafsilotlari, rasmi va narxi</h2>
             <p style={{ margin: 0, fontSize: 13.5, color: "var(--color-muted)" }}>
-              Oylik tarif: {inspectedRoom.monthlyPrice} • Band o‘rinlar: {inspectedRoom.occupied} / {inspectedRoom.capacity}
+              Oylik tarif: <b>{inspectedRoom.monthlyPrice}</b> • Band o‘rinlar: {inspectedRoom.occupied} / {inspectedRoom.capacity}
             </p>
+
+            <form
+              className="admin-modal-form"
+              style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid #e2ecfc" }}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await runAdminRequest({
+                  url: `/api/admin/dorm-rooms/${inspectedRoom.id}`,
+                  method: "PATCH",
+                  body: {
+                    roomNumber: inspectEdit.roomNumber,
+                    floor: Number(inspectEdit.floor),
+                    roomTypeId: Number(inspectEdit.roomTypeId),
+                    customPrice: inspectEdit.customPrice,
+                    image: inspectEdit.image,
+                    description: inspectEdit.description
+                  },
+                  busyKey: `dorm-save-${inspectedRoom.id}`,
+                  successMsg: `${inspectEdit.roomNumber}-xona narxi va rasmi yangilandi!`
+                });
+              }}
+            >
+              <RoomImagePicker
+                value={inspectEdit.image}
+                onChange={(img) => setInspectEdit((p) => ({ ...p, image: img }))}
+                availableImages={overview.availableImages}
+                onError={showToast}
+              />
+              <label className="input-group">
+                <span>Xona raqami *</span>
+                <input
+                  required
+                  value={inspectEdit.roomNumber}
+                  onChange={(e) => setInspectEdit((p) => ({ ...p, roomNumber: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Qavat *</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  required
+                  value={inspectEdit.floor}
+                  onChange={(e) => setInspectEdit((p) => ({ ...p, floor: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Xona turi / Sig‘imi</span>
+                <select
+                  value={inspectEdit.roomTypeId}
+                  onChange={(e) => setInspectEdit((p) => ({ ...p, roomTypeId: e.target.value }))}
+                >
+                  {overview.rooms.map((rt) => (
+                    <option key={rt.id} value={rt.id}>
+                      {rt.title} ({rt.spotsPerRoom} o‘rin — {rt.price})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="input-group">
+                <span>Xona oylik narxi (so‘m) *</span>
+                <input
+                  required
+                  placeholder="Masalan: 1 100 000 so‘m"
+                  value={inspectEdit.customPrice}
+                  onChange={(e) => setInspectEdit((p) => ({ ...p, customPrice: e.target.value }))}
+                />
+              </label>
+              <label className="input-group is-full">
+                <span>Xona tavsifi</span>
+                <input
+                  placeholder="Xona jihozlari va qulayliklari haqida qisqacha..."
+                  value={inspectEdit.description}
+                  onChange={(e) => setInspectEdit((p) => ({ ...p, description: e.target.value }))}
+                />
+              </label>
+              <button type="submit" className="btn btn-primary btn-sm is-full" disabled={busyId === `dorm-save-${inspectedRoom.id}`}>
+                Xona rasmi va narxini saqlash
+              </button>
+            </form>
 
             <div className="admin-bed-slots-grid">
               {Array.from({ length: inspectedRoom.capacity }).map((_, idx) => {
@@ -142,24 +310,37 @@ export default function AdminModals({
         <div className="modal-backdrop" onClick={() => setRoomModalOpen(false)}>
           <div className="modal-card admin-modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close-btn" onClick={() => setRoomModalOpen(false)} aria-label="Yopish"><X size={20} /></button>
-            <h2 style={{ margin: "0 0 6px", color: "var(--blue-navy)" }}>Yangi xona raqami qo‘shish</h2>
-            <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)" }}>Yotoqxona xaritasiga yangi xona raqamini kiriting.</p>
+            <h2 style={{ margin: "0 0 6px", color: "var(--blue-navy)" }}>Yangi xona raqami, narxi va rasmini qo‘shish</h2>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)" }}>Yotoqxona xaritasiga yangi xona raqami, oylik narxi va rasmini kiriting.</p>
             <form
               className="admin-modal-form"
               onSubmit={async (e) => {
                 e.preventDefault();
                 const ok = await runAdminRequest({
                   url: "/api/admin/dorm-rooms",
-                  body: { roomNumber: newRoomForm.roomNumber, roomTypeId: Number(newRoomForm.roomTypeId), floor: Number(newRoomForm.floor) },
+                  body: {
+                    roomNumber: newRoomForm.roomNumber,
+                    roomTypeId: Number(newRoomForm.roomTypeId),
+                    floor: Number(newRoomForm.floor),
+                    customPrice: newRoomForm.customPrice,
+                    image: newRoomForm.image,
+                    description: newRoomForm.description
+                  },
                   busyKey: "new-dorm-room",
-                  successMsg: `${newRoomForm.roomNumber}-xona qo‘shildi!`
+                  successMsg: `${newRoomForm.roomNumber}-xona rasmi va narxi bilan qo‘shildi!`
                 });
                 if (ok) {
-                  setNewRoomForm((p) => ({ ...p, roomNumber: "" }));
+                  setNewRoomForm((p) => ({ ...p, roomNumber: "", customPrice: "", description: "" }));
                   setRoomModalOpen(false);
                 }
               }}
             >
+              <RoomImagePicker
+                value={newRoomForm.image || "/images/room3.jpeg"}
+                onChange={(img) => setNewRoomForm((p) => ({ ...p, image: img }))}
+                availableImages={overview.availableImages}
+                onError={showToast}
+              />
               <label className="input-group">
                 <span>Xona raqami *</span>
                 <input required placeholder="Masalan: 405" value={newRoomForm.roomNumber} onChange={(e) => setNewRoomForm((p) => ({ ...p, roomNumber: e.target.value }))} />
@@ -168,15 +349,198 @@ export default function AdminModals({
                 <span>Qavat *</span>
                 <input type="number" min={1} max={20} required value={newRoomForm.floor} onChange={(e) => setNewRoomForm((p) => ({ ...p, floor: e.target.value }))} />
               </label>
-              <label className="input-group is-full">
-                <span>Xona sig‘imi *</span>
-                <select value={newRoomForm.roomTypeId} onChange={(e) => setNewRoomForm((p) => ({ ...p, roomTypeId: e.target.value }))}>
-                  <option value="1">2 kishilik (1 100 000 so‘m)</option>
-                  <option value="2">4 kishilik (900 000 so‘m)</option>
-                  <option value="3">6 kishilik (800 000 so‘m)</option>
+              <label className="input-group">
+                <span>Xona turi va sig‘imi *</span>
+                <select
+                  value={newRoomForm.roomTypeId}
+                  onChange={(e) => {
+                    const rt = overview.rooms.find((r) => String(r.id) === e.target.value);
+                    setNewRoomForm((p) => ({
+                      ...p,
+                      roomTypeId: e.target.value,
+                      customPrice: rt ? rt.price : p.customPrice,
+                      image: rt?.image || p.image
+                    }));
+                  }}
+                >
+                  {overview.rooms.map((rt) => (
+                    <option key={rt.id} value={rt.id}>
+                      {rt.title} ({rt.spotsPerRoom} kishilik — {rt.price})
+                    </option>
+                  ))}
                 </select>
               </label>
-              <button type="submit" className="btn btn-primary is-full" disabled={busyId === "new-dorm-room"}>Saqlash</button>
+              <label className="input-group">
+                <span>Oylik narxi (so‘m) *</span>
+                <input
+                  required
+                  placeholder="Masalan: 1 100 000 so‘m"
+                  value={newRoomForm.customPrice ?? "1 100 000 so‘m"}
+                  onChange={(e) => setNewRoomForm((p) => ({ ...p, customPrice: e.target.value }))}
+                />
+              </label>
+              <label className="input-group is-full">
+                <span>Xona tavsifi (ixtiyoriy)</span>
+                <input
+                  placeholder="Masalan: Balkonli, yangi mebel va konditsioner bilan jihozlangan..."
+                  value={newRoomForm.description || ""}
+                  onChange={(e) => setNewRoomForm((p) => ({ ...p, description: e.target.value }))}
+                />
+              </label>
+              <button type="submit" className="btn btn-primary is-full" disabled={busyId === "new-dorm-room"}>Xonani saqlash</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {roomTypeModal && (
+        <div className="modal-backdrop" onClick={() => setRoomTypeModal(null)}>
+          <div className="modal-card admin-modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setRoomTypeModal(null)} aria-label="Yopish"><X size={20} /></button>
+            <h2 style={{ margin: "0 0 6px", color: "var(--blue-navy)" }}>
+              {roomTypeModal.mode === "edit" ? `${roomTypeForm.title} — Rasm va narxni tahrirlash` : "Yangi xona turi, narx va rasm yaratish"}
+            </h2>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)" }}>
+              Yaratilgan xona turi saytning &ldquo;Xonalar&rdquo;, &ldquo;Taqqoslash&rdquo; va &ldquo;Bron qilish&rdquo; bo‘limlarida rasmi va narxi bilan chiqadi.
+            </p>
+            <form
+              className="admin-modal-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const isEdit = roomTypeModal.mode === "edit";
+                const ok = await runAdminRequest({
+                  url: isEdit ? `/api/admin/rooms/${roomTypeForm.id}` : "/api/admin/rooms",
+                  method: isEdit ? "PUT" : "POST",
+                  body: {
+                    title: roomTypeForm.title,
+                    price: roomTypeForm.price,
+                    spotsPerRoom: Number(roomTypeForm.spotsPerRoom),
+                    totalRooms: Number(roomTypeForm.totalRooms),
+                    occupiedSpots: Number(roomTypeForm.occupiedSpots || 0),
+                    floor: roomTypeForm.floor,
+                    size: roomTypeForm.size,
+                    bathroom: roomTypeForm.bathroom,
+                    tag: roomTypeForm.tag,
+                    badgeType: roomTypeForm.badgeType,
+                    image: roomTypeForm.image,
+                    description: roomTypeForm.description,
+                    features: roomTypeForm.features,
+                    initialRoomNumber: roomTypeForm.initialRoomNumber
+                  },
+                  busyKey: "save-room-type",
+                  successMsg: isEdit ? "Xona turi, narxi va rasmi yangilandi!" : "Yangi xona turi saytga qo‘shildi!"
+                });
+                if (ok) setRoomTypeModal(null);
+              }}
+            >
+              <RoomImagePicker
+                value={roomTypeForm.image}
+                onChange={(img) => setRoomTypeForm((p) => ({ ...p, image: img }))}
+                availableImages={overview.availableImages}
+                onError={showToast}
+              />
+              <label className="input-group">
+                <span>Xona turi nomi *</span>
+                <input
+                  required
+                  placeholder="Masalan: 04 / 1 Kishilik VIP Xona"
+                  value={roomTypeForm.title}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, title: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Oylik narxi (so‘m) *</span>
+                <input
+                  required
+                  placeholder="Masalan: 1 400 000 so‘m"
+                  value={roomTypeForm.price}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, price: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Xona sig‘imi (necha kishilik) *</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  required
+                  value={roomTypeForm.spotsPerRoom}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, spotsPerRoom: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Jami xonalar soni *</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  required
+                  value={roomTypeForm.totalRooms}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, totalRooms: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Qavati</span>
+                <input
+                  placeholder="4-qavat"
+                  value={roomTypeForm.floor}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, floor: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Maydoni (m²)</span>
+                <input
+                  placeholder="24 m²"
+                  value={roomTypeForm.size}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, size: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Sanuzel turi</span>
+                <input
+                  placeholder="Xona ichida shaxsiy sanuzel"
+                  value={roomTypeForm.bathroom}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, bathroom: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Teg / Yorliq</span>
+                <input
+                  placeholder="Tavsiya etiladi / VIP"
+                  value={roomTypeForm.tag}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, tag: e.target.value }))}
+                />
+              </label>
+              {roomTypeModal.mode !== "edit" && (
+                <label className="input-group is-full">
+                  <span>Boshlang‘ich xona raqami (ixtiyoriy, xaritaga ham qo‘shish uchun)</span>
+                  <input
+                    placeholder="Masalan: 405"
+                    value={roomTypeForm.initialRoomNumber || ""}
+                    onChange={(e) => setRoomTypeForm((p) => ({ ...p, initialRoomNumber: e.target.value }))}
+                  />
+                </label>
+              )}
+              <label className="input-group is-full">
+                <span>Qulayliklar (vergul bilan ajrating)</span>
+                <input
+                  placeholder="Shaxsiy sanuzel, Konditsioner, O‘qish stoli, Wi-Fi 500 Mbps"
+                  value={roomTypeForm.features}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, features: e.target.value }))}
+                />
+              </label>
+              <label className="input-group is-full">
+                <span>To‘liq tavsif *</span>
+                <textarea
+                  rows={3}
+                  required
+                  value={roomTypeForm.description}
+                  onChange={(e) => setRoomTypeForm((p) => ({ ...p, description: e.target.value }))}
+                />
+              </label>
+              <button type="submit" className="btn btn-primary is-full" disabled={busyId === "save-room-type"}>
+                {roomTypeModal.mode === "edit" ? "O‘zgarishlarni saqlash" : "Xona turini yaratish"}
+              </button>
             </form>
           </div>
         </div>
@@ -484,10 +848,18 @@ export default function AdminModals({
                 <input required value={accountForm.login} onChange={(e) => setAccountForm((p) => ({ ...p, login: e.target.value }))} />
               </label>
               <label className="input-group is-full">
-                <span>Yangi parol (o‘zgartirish uchun kiriting, kamida 6 ta belgi)</span>
-                <input type="text" placeholder="O‘zgartirmasangiz bo‘sh qoldiring..." value={accountForm.password} onChange={(e) => setAccountForm((p) => ({ ...p, password: e.target.value }))} />
+                <span>{accountModal.isNew ? "Parol * (kamida 6 ta belgi)" : "Yangi parol (o‘zgartirish uchun kiriting, kamida 6 ta belgi)"}</span>
+                <input
+                  type="text"
+                  required={Boolean(accountModal.isNew)}
+                  placeholder={accountModal.isNew ? "Kamida 6 ta belgi..." : "O‘zgartirmasangiz bo‘sh qoldiring..."}
+                  value={accountForm.password}
+                  onChange={(e) => setAccountForm((p) => ({ ...p, password: e.target.value }))}
+                />
               </label>
-              <button type="submit" className="btn btn-primary is-full" disabled={busyId === `edit-acc-${accountModal.id}`}>Saqlash</button>
+              <button type="submit" className="btn btn-primary is-full" disabled={busyId === `edit-acc-${accountModal.id}` || busyId === "new-acc"}>
+                Saqlash
+              </button>
             </form>
           </div>
         </div>

@@ -7,6 +7,7 @@ import {
 import { heroCampusPhotos } from "../data/dormData";
 
 export default function HomePage({
+  rooms = [],
   openBookingModal,
   navigateTo,
   heroSearchType,
@@ -82,10 +83,12 @@ export default function HomePage({
                 value={heroSearchType}
                 onChange={(e) => setHeroSearchType(e.target.value)}
               >
-                <option value="all">Barcha xonalar (3 tur)</option>
-                <option value="two">2 kishilik yotoqxona (1 100 000 so‘m)</option>
-                <option value="four">4 kishilik yotoqxona (900 000 so‘m)</option>
-                <option value="six">6 kishilik yotoqxona (800 000 so‘m)</option>
+                <option value="all">Barcha xonalar ({rooms.length} tur)</option>
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.category}>
+                    {r.title.replace(/^\d+\s*\/\s*/, "")} ({r.price})
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -98,9 +101,13 @@ export default function HomePage({
                 onChange={(e) => setHeroSearchBudget(e.target.value)}
               >
                 <option value="all">Barcha narxlar</option>
-                <option value="six">800 000 so‘m / oy</option>
-                <option value="four">900 000 so‘m / oy</option>
-                <option value="two">1 100 000 so‘m / oy</option>
+                {[...rooms]
+                  .sort((a, b) => (a.priceNum || 0) - (b.priceNum || 0))
+                  .map((r) => (
+                    <option key={r.id} value={r.category}>
+                      {r.price} / oy
+                    </option>
+                  ))}
               </select>
             </div>
 

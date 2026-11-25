@@ -48,15 +48,28 @@ export default function ComparisonPage({ rooms, openBooking, openDetails }) {
     }
   };
 
+  const getRoomSpecs = (r) =>
+    specsByCategory[r.category] || {
+      highlight: `${r.tag || "Zamonaviy"} • ${r.people}`,
+      people: { type: "tier-best", label: r.people || `${r.spotsPerRoom} kishilik` },
+      size: { type: "tier-mid", label: `${r.size || "26 m²"} (${r.floor || "4-qavat"})` },
+      bathroom: { type: "tier-best", label: r.bathroom || "Shaxsiy sanuzel" },
+      desk: { type: "tier-best", label: "Shaxsiy o‘qish stoli" },
+      ac: { type: "tier-best", label: "Konditsioner + isitish" },
+      storage: { type: "tier-best", label: "Shkaf + tortmalar" },
+      wifi: { type: "same", label: "Bepul" },
+      utilities: { type: "same", label: "100% ichida" }
+    };
+
   const rows = [
-    { key: "people", label: "O‘rinlar soni", icon: Users, get: (r) => specsByCategory[r.category].people },
-    { key: "size", label: "Xona maydoni", icon: Building2, get: (r) => specsByCategory[r.category].size },
-    { key: "bathroom", label: "Sanuzel va dush", icon: Sparkles, get: (r) => specsByCategory[r.category].bathroom },
-    { key: "desk", label: "O‘qish stoli", icon: BookOpen, get: (r) => specsByCategory[r.category].desk },
-    { key: "ac", label: "Iqlim nazorati", icon: ShieldCheck, get: (r) => specsByCategory[r.category].ac },
-    { key: "storage", label: "Shkaf va saqlash", icon: Bed, get: (r) => specsByCategory[r.category].storage },
-    { key: "wifi", label: "Wi-Fi (500 Mbit/s)", icon: Wifi, get: (r) => specsByCategory[r.category].wifi },
-    { key: "utilities", label: "Kommunal va kir yuvish", icon: WashingMachine, get: (r) => specsByCategory[r.category].utilities }
+    { key: "people", label: "O‘rinlar soni", icon: Users, get: (r) => getRoomSpecs(r).people },
+    { key: "size", label: "Xona maydoni", icon: Building2, get: (r) => getRoomSpecs(r).size },
+    { key: "bathroom", label: "Sanuzel va dush", icon: Sparkles, get: (r) => getRoomSpecs(r).bathroom },
+    { key: "desk", label: "O‘qish stoli", icon: BookOpen, get: (r) => getRoomSpecs(r).desk },
+    { key: "ac", label: "Iqlim nazorati", icon: ShieldCheck, get: (r) => getRoomSpecs(r).ac },
+    { key: "storage", label: "Shkaf va saqlash", icon: Bed, get: (r) => getRoomSpecs(r).storage },
+    { key: "wifi", label: "Wi-Fi (500 Mbit/s)", icon: Wifi, get: (r) => getRoomSpecs(r).wifi },
+    { key: "utilities", label: "Kommunal va kir yuvish", icon: WashingMachine, get: (r) => getRoomSpecs(r).utilities }
   ];
 
   const isRowDifferent = (row) =>
@@ -179,7 +192,7 @@ export default function ComparisonPage({ rooms, openBooking, openDetails }) {
                       </div>
                       <div className="compare-card-highlight">
                         <Sparkles size={12} />
-                        <span>{specsByCategory[r.category].highlight}</span>
+                        <span>{getRoomSpecs(r).highlight}</span>
                       </div>
                       <div className="compare-card-actions">
                         <button

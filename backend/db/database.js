@@ -119,6 +119,14 @@ db.exec(`
     pinned INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS gallery_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'rooms',
+    image TEXT NOT NULL,
+    tag TEXT NOT NULL DEFAULT 'Yotoqxona',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 const accountCols = db.prepare("PRAGMA table_info(accounts)").all().map((c) => c.name);
@@ -128,6 +136,25 @@ if (!accountCols.includes("phone")) db.exec("ALTER TABLE accounts ADD COLUMN pho
 if (!accountCols.includes("avatar")) db.exec("ALTER TABLE accounts ADD COLUMN avatar TEXT");
 if (!accountCols.includes("role")) db.exec("ALTER TABLE accounts ADD COLUMN role TEXT NOT NULL DEFAULT 'student'");
 if (!accountCols.includes("password_ciphertext")) db.exec("ALTER TABLE accounts ADD COLUMN password_ciphertext TEXT");
+
+const invCols = db.prepare("PRAGMA table_info(room_inventory)").all().map((c) => c.name);
+if (!invCols.includes("price_num")) db.exec("ALTER TABLE room_inventory ADD COLUMN price_num INTEGER");
+if (!invCols.includes("people")) db.exec("ALTER TABLE room_inventory ADD COLUMN people TEXT");
+if (!invCols.includes("tag")) db.exec("ALTER TABLE room_inventory ADD COLUMN tag TEXT");
+if (!invCols.includes("badge_type")) db.exec("ALTER TABLE room_inventory ADD COLUMN badge_type TEXT");
+if (!invCols.includes("floor")) db.exec("ALTER TABLE room_inventory ADD COLUMN floor TEXT");
+if (!invCols.includes("size")) db.exec("ALTER TABLE room_inventory ADD COLUMN size TEXT");
+if (!invCols.includes("bathroom")) db.exec("ALTER TABLE room_inventory ADD COLUMN bathroom TEXT");
+if (!invCols.includes("image")) db.exec("ALTER TABLE room_inventory ADD COLUMN image TEXT");
+if (!invCols.includes("gallery_json")) db.exec("ALTER TABLE room_inventory ADD COLUMN gallery_json TEXT");
+if (!invCols.includes("description")) db.exec("ALTER TABLE room_inventory ADD COLUMN description TEXT");
+if (!invCols.includes("amenities_json")) db.exec("ALTER TABLE room_inventory ADD COLUMN amenities_json TEXT");
+if (!invCols.includes("features_json")) db.exec("ALTER TABLE room_inventory ADD COLUMN features_json TEXT");
+
+const dormRoomCols = db.prepare("PRAGMA table_info(dorm_rooms)").all().map((c) => c.name);
+if (!dormRoomCols.includes("custom_price")) db.exec("ALTER TABLE dorm_rooms ADD COLUMN custom_price TEXT");
+if (!dormRoomCols.includes("image")) db.exec("ALTER TABLE dorm_rooms ADD COLUMN image TEXT");
+if (!dormRoomCols.includes("description")) db.exec("ALTER TABLE dorm_rooms ADD COLUMN description TEXT");
 
 const bookingCols = db.prepare("PRAGMA table_info(bookings)").all().map((c) => c.name);
 if (!bookingCols.includes("preferred_room_number")) db.exec("ALTER TABLE bookings ADD COLUMN preferred_room_number TEXT");
@@ -148,6 +175,139 @@ function seedDefaults() {
   seedRoom.run(1, "two", "01 / 2 Kishilik Yotoqxona", "1 100 000 so‘m", 12, 2, 20);
   seedRoom.run(2, "four", "02 / 4 Kishilik Yotoqxona", "900 000 so‘m", 15, 4, 52);
   seedRoom.run(3, "six", "03 / 6 Kishilik Yotoqxona", "800 000 so‘m", 10, 6, 48);
+
+  const defaultRoomMeta = [
+    {
+      id: 1,
+      priceNum: 1100000,
+      people: "2 o‘rin",
+      tag: "Tavsiya etiladi",
+      badgeType: "recommended",
+      floor: "4-qavat",
+      size: "24 m²",
+      bathroom: "Xona ichida shaxsiy sanuzel",
+      image: "/images/room3.jpeg",
+      gallery: ["/images/room3.jpeg", "/images/hero-dorm-room.jpeg", "/images/room2.jpeg"],
+      description: "Ikkita alohida bir kishilik to‘shak, tabiiy yog‘och tortmalar, 2 ta o‘qish stoli, markaziy isitish, konditsioner va xona ichidagi shaxsiy sanuzel.",
+      amenities: [
+        "2 ta alohida ortopedik to‘shak",
+        "2 ta keng o‘qish stoli va kreslo",
+        "Xona ichida shaxsiy sanuzel",
+        "Karavot tagidagi keng tortmalar",
+        "Markaziy isitish va konditsioner",
+        "Yumshoq gilam va zamonaviy interyer"
+      ],
+      features: ["Shaxsiy sanuzel", "2 ta o‘qish stoli", "Konditsioner", "Wi-Fi 500 Mbps"]
+    },
+    {
+      id: 2,
+      priceNum: 900000,
+      people: "4 o‘rin",
+      tag: "Eng ommabop",
+      badgeType: "popular",
+      floor: "3-qavat",
+      size: "30 m²",
+      bathroom: "Umumiy zamonaviy dushxonalar",
+      image: "/images/room-4.jpg",
+      gallery: ["/images/room-4.jpg", "/images/room3.jpeg", "/images/room-6.jpg"],
+      description: "4 kishilik yorug‘ va shinam yotoqxona: 2 ta mustahkam ikki qavatli karavot, o‘qish stoli, ko‘k gilam, karavot osti tortmalari va keng deraza.",
+      amenities: [
+        "2 ta ikki qavatli mustahkam karavot (4 o‘rin)",
+        "O‘qish stoli va devor javoni",
+        "Karavot ostidagi saqlash tortmalari",
+        "Markaziy isitish va keng deraza",
+        "500 Mbit/s optik tolali Wi-Fi",
+        "Kunlik umumiy tozalash xizmati"
+      ],
+      features: ["Wi-Fi 500 Mbps", "O‘qish stoli", "Saqlash tortmalari", "Kunlik tozalash"]
+    },
+    {
+      id: 3,
+      priceNum: 800000,
+      people: "6 o‘rin",
+      tag: "Hamyonbop",
+      badgeType: "budget",
+      floor: "2-qavat",
+      size: "36 m²",
+      bathroom: "Umumiy har qavatda (Alohida bloklar)",
+      image: "/images/room-6.jpg",
+      gallery: ["/images/room-6.jpg", "/images/room-4.jpg", "/images/room3.jpeg"],
+      description: "6 talaba uchun mo‘ljallangan keng va zamonaviy xona: 6 ta alohida bir qavatli karavot, shaxsiy yon tumbalar, LED shift yoritgichi va yumshoq gilam.",
+      amenities: [
+        "6 ta alohida bir qavatli karavot",
+        "Har bir karavot yonida shaxsiy tumba",
+        "Zamonaviy LED shift yoritgichi",
+        "Rolikli parda va yumshoq gilam",
+        "500 Mbit/s optik tolali Wi-Fi",
+        "Bepul kir yuvish va oshxona"
+      ],
+      features: ["6 ta alohida karavot", "Yon tumbalar", "LED yoritish", "Wi-Fi 500 Mbps"]
+    }
+  ];
+
+  const updateMetaStmt = db.prepare(`
+    UPDATE room_inventory
+    SET price_num = COALESCE(price_num, ?),
+        people = COALESCE(people, ?),
+        tag = COALESCE(tag, ?),
+        badge_type = COALESCE(badge_type, ?),
+        floor = COALESCE(floor, ?),
+        size = COALESCE(size, ?),
+        bathroom = COALESCE(bathroom, ?),
+        image = COALESCE(image, ?),
+        gallery_json = COALESCE(gallery_json, ?),
+        description = COALESCE(description, ?),
+        amenities_json = COALESCE(amenities_json, ?),
+        features_json = COALESCE(features_json, ?)
+    WHERE id = ?
+  `);
+  for (const m of defaultRoomMeta) {
+    updateMetaStmt.run(
+      m.priceNum,
+      m.people,
+      m.tag,
+      m.badgeType,
+      m.floor,
+      m.size,
+      m.bathroom,
+      m.image,
+      JSON.stringify(m.gallery),
+      m.description,
+      JSON.stringify(m.amenities),
+      JSON.stringify(m.features),
+      m.id
+    );
+  }
+
+  if ((db.prepare("SELECT COUNT(*) AS cnt FROM gallery_photos").get()?.cnt || 0) === 0) {
+    const insGallery = db.prepare(`
+      INSERT INTO gallery_photos (title, category, image, tag)
+      VALUES (?, ?, ?, ?)
+    `);
+    const defaultGallery = [
+      ["Yotoqxona Asosiy Binosi", "rooms", "/images/campus-2.jpg", "Bino"],
+      ["4 Kishilik Yotoqxona", "rooms", "/images/room-4.jpg", "4 o‘rin"],
+      ["6 Kishilik Yotoqxona", "rooms", "/images/room-6.jpg", "6 o‘rin"],
+      ["2 Kishilik Yotoqxona", "rooms", "/images/room3.jpeg", "2 o‘rin"],
+      ["Keng Talabalar Kutubxonasi", "study", "/images/l1.jpeg", "Mutolaa zali"],
+      ["Sokin O‘quv va Kovorking Hududi", "study", "/images/l2.jpeg", "O‘qish zali"],
+      ["Guruh Ishlari va Kitobxonlik Zali", "study", "/images/l3.jpeg", "Kovorking"],
+      ["Har Bir Qavatdagi Oshxona", "dining", "/images/k1.jpeg", "Pishirish maydoni"],
+      ["Umumiy Ovqatlanish Maydoni", "dining", "/images/k2.jpeg", "Oshxona"],
+      ["Maishiy Texnika va Jihozlar", "dining", "/images/k3.jpeg", "Jihozlar"],
+      ["Ochiq Basketbol Maydonchasi", "sports", "/images/b1.jpeg", "Sport"],
+      ["Talabalar Sport Majmuasi", "sports", "/images/b2.webp", "Jismoniy tarbiya"],
+      ["Street Workout Maydoni", "sports", "/images/b3.jpeg", "Mashg‘ulot"],
+      ["TPU Bosh O‘quv Korpus Fasad", "campus", "/images/d1.jpg", "Universitet binosi"],
+      ["Yotoqxona Kirish Maydoni va Hovli", "campus", "/images/d2.jpeg", "Yotoqxona hovlisi"],
+      ["Kampus Xiyoboni va Yashil Hudud", "campus", "/images/d3.jpg", "Yashil hudud"],
+      ["Yotoqxona Zamonaviy Korpus Binosi", "campus", "/images/d4.jpg", "Turar joy binosi"],
+      ["Kechki Yoritilgan Kampus", "campus", "/images/d6.jpeg", "Kechki manzara"],
+      ["Talabalar Shaharchasi Umumiy Ko‘rinishi", "campus", "/images/dormitory-building.png", "Bosh me’moriy majmua"],
+      ["Universitet Kampusi Panorama", "campus", "/images/university-campus.png", "Kampus"]
+    ];
+    for (const g of defaultGallery) insGallery.run(...g);
+  }
 
   if ((db.prepare("SELECT COUNT(*) AS cnt FROM dorm_announcements").get()?.cnt || 0) === 0) {
     const insAnn = db.prepare(`
@@ -245,14 +405,119 @@ export async function initDatabase() {
   }
 }
 
+function parseJsonArray(raw, fallback = []) {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function parsePriceDigits(priceText) {
+  const digits = String(priceText || "").replace(/\D/g, "");
+  return digits ? Number(digits) : 0;
+}
+
+export function formatPriceUzs(num) {
+  const n = Math.round(Number(num) || 0);
+  return `${n.toLocaleString("ru-RU").replace(/,/g, " ")} so‘m`;
+}
+
+export function saveUploadedImage(imageInput, prefix = "room") {
+  if (!imageInput || typeof imageInput !== "string") return null;
+  const trimmed = imageInput.trim();
+  if (!trimmed.startsWith("data:image/")) {
+    return trimmed;
+  }
+  const match = trimmed.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+  if (!match) return null;
+  const rawExt = match[1].toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
+  const ext = ["jpg", "png", "webp", "gif", "svg"].includes(rawExt) ? rawExt : "jpg";
+  const buffer = Buffer.from(match[2], "base64");
+  const fileName = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+
+  const pubUploadDir = path.join(root, "public", "images", "uploads");
+  fs.mkdirSync(pubUploadDir, { recursive: true });
+  fs.writeFileSync(path.join(pubUploadDir, fileName), buffer);
+
+  const distDir = path.join(root, "dist", "images", "uploads");
+  if (fs.existsSync(path.join(root, "dist"))) {
+    fs.mkdirSync(distDir, { recursive: true });
+    fs.writeFileSync(path.join(distDir, fileName), buffer);
+  }
+
+  return `/images/uploads/${fileName}`;
+}
+
+export function getAvailableImages() {
+  const imagesDir = path.join(root, "public", "images");
+  const out = [];
+  if (fs.existsSync(imagesDir)) {
+    for (const entry of fs.readdirSync(imagesDir, { withFileTypes: true })) {
+      if (entry.isFile() && /\.(jpe?g|png|webp|svg)$/i.test(entry.name)) {
+        out.push(`/images/${entry.name}`);
+      }
+    }
+    const uploadsDir = path.join(imagesDir, "uploads");
+    if (fs.existsSync(uploadsDir)) {
+      for (const entry of fs.readdirSync(uploadsDir, { withFileTypes: true })) {
+        if (entry.isFile() && /\.(jpe?g|png|webp|svg)$/i.test(entry.name)) {
+          out.unshift(`/images/uploads/${entry.name}`);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+export function getGalleryPhotos() {
+  return db.prepare("SELECT * FROM gallery_photos ORDER BY id DESC").all().map((g) => ({
+    id: g.id,
+    title: g.title,
+    category: g.category,
+    image: g.image,
+    tag: g.tag,
+    createdAt: g.created_at
+  }));
+}
+
 export function formatRoomInventory(row) {
   const totalSpots = row.total_rooms * row.spots_per_room;
   const availableSpots = Math.max(0, totalSpots - row.occupied_spots);
+  const priceNum = row.price_num || parsePriceDigits(row.price) || 900000;
+  const mainImage = row.image || "/images/room3.jpeg";
+  const gallery = parseJsonArray(row.gallery_json, [mainImage]);
+  if (gallery.length === 0 || gallery[0] !== mainImage) {
+    const withoutMain = gallery.filter((g) => g !== mainImage);
+    gallery.splice(0, gallery.length, mainImage, ...withoutMain);
+  }
+  const features = parseJsonArray(row.features_json, ["Wi-Fi 500 Mbps", "O‘qish stoli", "Kunlik tozalash"]);
+  const amenities = parseJsonArray(row.amenities_json, [
+    `${row.spots_per_room} o‘rinli qulay karavot va matras`,
+    "500 Mbit/s optik tolali Wi-Fi",
+    "Markaziy isitish va yoritish",
+    "Kunlik tozalash xizmati"
+  ]);
   return {
     id: row.id,
     category: row.category,
     title: row.title,
+    people: row.people || `${row.spots_per_room} o‘rin`,
+    capacityNumber: row.spots_per_room,
     price: row.price,
+    priceNum,
+    tag: row.tag || "Zamonaviy",
+    badgeType: row.badge_type || "popular",
+    floor: row.floor || "3-qavat",
+    size: row.size || `${18 + row.spots_per_room * 3} m²`,
+    bathroom: row.bathroom || "Umumiy zamonaviy sanuzel",
+    image: mainImage,
+    gallery,
+    description: row.description || `${row.spots_per_room} nafar talaba uchun barcha qulayliklarga ega zamonaviy va shinam xona.`,
+    amenities,
+    features,
     totalRooms: row.total_rooms,
     spotsPerRoom: row.spots_per_room,
     totalSpots,
@@ -263,7 +528,7 @@ export function formatRoomInventory(row) {
 
 export function getAdminDormRooms() {
   const dormRooms = db.prepare(`
-    SELECT d.*, i.title AS type_title, i.price AS monthly_price
+    SELECT d.*, i.title AS type_title, i.price AS monthly_price, i.image AS type_image, i.description AS type_description
     FROM dorm_rooms d
     LEFT JOIN room_inventory i ON i.id = d.room_type_id
     ORDER BY d.floor DESC, d.room_number ASC
@@ -288,13 +553,17 @@ export function getAdminDormRooms() {
   }
   return dormRooms.map((r) => {
     const occupants = byRoom.get(r.id) || [];
+    const effectivePrice = r.custom_price || r.monthly_price || "900 000 so‘m";
     return {
       id: r.id,
       roomNumber: r.room_number,
       roomTypeId: r.room_type_id,
       roomCategory: r.room_category,
       typeTitle: r.type_title || `${r.capacity} kishilik`,
-      monthlyPrice: r.monthly_price || "",
+      monthlyPrice: effectivePrice,
+      customPrice: r.custom_price || "",
+      image: r.image || r.type_image || "/images/room3.jpeg",
+      description: r.description || r.type_description || "",
       floor: r.floor,
       capacity: r.capacity,
       occupied: occupants.length,
@@ -307,7 +576,8 @@ export function getAdminDormRooms() {
 
 export function getAdminResidents() {
   return db.prepare(`
-    SELECT rr.*, d.room_number, d.floor, d.room_category, d.capacity, i.title AS type_title, i.price AS monthly_price
+    SELECT rr.*, d.room_number, d.floor, d.room_category, d.capacity, d.custom_price, d.image AS room_image,
+           i.title AS type_title, i.price AS monthly_price, i.image AS type_image
     FROM room_residents rr
     JOIN dorm_rooms d ON d.id = rr.dorm_room_id
     LEFT JOIN room_inventory i ON i.id = d.room_type_id
@@ -320,7 +590,8 @@ export function getAdminResidents() {
     roomCategory: row.room_category,
     capacity: row.capacity,
     typeTitle: row.type_title || "",
-    monthlyPrice: row.monthly_price || "",
+    monthlyPrice: row.custom_price || row.monthly_price || "",
+    roomImage: row.room_image || row.type_image || "/images/room3.jpeg",
     bookingId: row.booking_id,
     studentName: row.student_name,
     phone: row.phone,
@@ -376,6 +647,9 @@ export function getPublicDormRooms() {
     roomCategory: r.roomCategory,
     typeTitle: r.typeTitle,
     monthlyPrice: r.monthlyPrice,
+    customPrice: r.customPrice,
+    image: r.image,
+    description: r.description,
     floor: r.floor,
     capacity: r.capacity,
     occupied: r.occupied,

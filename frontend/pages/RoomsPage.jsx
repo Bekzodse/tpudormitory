@@ -50,24 +50,15 @@ export default function RoomsPage({
           >
             Barchasi ({rooms.length})
           </button>
-          <button
-            className={`btn-filter ${roomFilter === "two" ? "active" : ""}`}
-            onClick={() => setRoomFilter("two")}
-          >
-            2 kishilik (1 100 000 so‘m)
-          </button>
-          <button
-            className={`btn-filter ${roomFilter === "four" ? "active" : ""}`}
-            onClick={() => setRoomFilter("four")}
-          >
-            4 kishilik (900 000 so‘m)
-          </button>
-          <button
-            className={`btn-filter ${roomFilter === "six" ? "active" : ""}`}
-            onClick={() => setRoomFilter("six")}
-          >
-            6 kishilik (800 000 so‘m)
-          </button>
+          {rooms.map((r) => (
+            <button
+              key={r.id}
+              className={`btn-filter ${roomFilter === r.category ? "active" : ""}`}
+              onClick={() => setRoomFilter(r.category)}
+            >
+              {r.spotsPerRoom || r.capacityNumber} kishilik ({r.price})
+            </button>
+          ))}
         </div>
       </div>
 

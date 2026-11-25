@@ -5261,6 +5261,246 @@ img {
   margin-bottom: 12px;
 }
 
+/* Admin Room Image Upload & Price Controls */
+.admin-room-type-media {
+  position: relative;
+  width: 100%;
+  height: 155px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eaf2ff;
+  margin-bottom: 10px;
+}
+
+.admin-room-type-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-room-type-media-overlay {
+  position: absolute;
+  inset: 0;
+  padding: 10px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: linear-gradient(180deg, rgba(6, 24, 56, 0.45) 0%, transparent 55%);
+}
+
+.admin-img-upload-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--blue-navy);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(6, 24, 56, 0.2);
+}
+
+.admin-img-upload-pill:hover {
+  background: var(--blue-primary);
+  color: #ffffff;
+}
+
+.admin-room-edit-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-dorm-card-thumb {
+  position: relative;
+  width: 100%;
+  height: 130px;
+  border-radius: 13px;
+  overflow: hidden;
+  background: #eaf2ff;
+  cursor: pointer;
+}
+
+.admin-dorm-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.35s ease;
+}
+
+.admin-dorm-card:hover .admin-dorm-card-thumb img {
+  transform: scale(1.05);
+}
+
+.admin-dorm-card-thumb .admin-room-num-badge {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  box-shadow: 0 4px 12px rgba(6, 24, 56, 0.25);
+}
+
+.admin-dorm-card-thumb .admin-occ-badge {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  backdrop-filter: blur(8px);
+}
+
+.admin-image-picker-box {
+  padding: 12px;
+  border-radius: 14px;
+  background: #f4f8ff;
+  border: 1.5px solid #d7e6fc;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-image-picker-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.admin-image-picker-preview {
+  width: 110px;
+  height: 76px;
+  border-radius: 11px;
+  overflow: hidden;
+  border: 1.5px solid #bfdbfe;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.admin-image-picker-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-image-picker-controls {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-image-picker-controls strong {
+  display: block;
+  font-size: 13px;
+  color: var(--blue-navy);
+}
+
+.admin-image-picker-controls small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--color-muted);
+}
+
+.admin-image-picker-thumbs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.admin-picker-thumb {
+  width: 56px;
+  height: 42px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  padding: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  background: #ffffff;
+}
+
+.admin-picker-thumb.active {
+  border-color: var(--blue-primary);
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+}
+
+.admin-picker-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-gallery-upload-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f4f8ff;
+  border: 1px solid #d7e6fc;
+  margin-bottom: 14px;
+}
+
+.admin-gallery-upload-bar input[type="text"],
+.admin-gallery-upload-bar select {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1.5px solid #d5e5fc;
+  background: #ffffff;
+  font-size: 12.5px;
+}
+
+.admin-gallery-upload-bar input[type="text"]:first-child {
+  flex: 1;
+  min-width: 210px;
+}
+
+.admin-gallery-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.admin-gallery-mini-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid #dce9fc;
+  background: #ffffff;
+}
+
+.admin-gallery-mini-card img {
+  width: 54px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.admin-gallery-mini-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-gallery-mini-body strong {
+  display: block;
+  font-size: 12px;
+  color: var(--blue-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-gallery-mini-body small {
+  display: block;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
 /* Database Inspector View */
 .admin-db-tables-bar {
   display: flex;

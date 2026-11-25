@@ -23,7 +23,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
 
   const [overview, setOverview] = useState({
     rooms: [], bookings: [], students: [], messages: [],
-    dormRooms: [], residents: [], maintenance: [], announcements: []
+    dormRooms: [], residents: [], maintenance: [], announcements: [],
+    gallery: [], availableImages: []
   });
   const [roomEdits, setRoomEdits] = useState({});
 
@@ -35,12 +36,32 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
   // Modal states
   const [inspectedRoomId, setInspectedRoomId] = useState(null);
   const [roomModalOpen, setRoomModalOpen] = useState(false);
+  const [roomTypeModal, setRoomTypeModal] = useState(null);
   const [residentModal, setResidentModal] = useState(null);
   const [maintModalOpen, setMaintModalOpen] = useState(false);
   const [annModalOpen, setAnnModalOpen] = useState(false);
   const [accountModal, setAccountModal] = useState(null);
 
-  const [newRoomForm, setNewRoomForm] = useState({ roomNumber: "", roomTypeId: "1", floor: "4" });
+  const [newRoomForm, setNewRoomForm] = useState({
+    roomNumber: "", roomTypeId: "1", floor: "4", customPrice: "1 100 000 so‘m", image: "/images/room3.jpeg", description: ""
+  });
+  const [roomTypeForm, setRoomTypeForm] = useState({
+    id: null,
+    title: "",
+    price: "1 200 000 so‘m",
+    spotsPerRoom: "2",
+    totalRooms: "10",
+    occupiedSpots: "0",
+    floor: "4-qavat",
+    size: "26 m²",
+    bathroom: "Xona ichida shaxsiy sanuzel",
+    tag: "Yangi",
+    badgeType: "recommended",
+    image: "/images/room3.jpeg",
+    description: "",
+    features: "Shaxsiy sanuzel, Konditsioner, O‘qish stoli, Wi-Fi 500 Mbps",
+    initialRoomNumber: ""
+  });
   const [resForm, setResForm] = useState({
     dormRoomId: "", studentName: "", phone: "", telegram: "",
     course: "1-kurs", faculty: "", paymentStatus: "pending", moveInDate: "2026-09-01"
@@ -65,11 +86,12 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
       setOverview({
         rooms: data.rooms || [], bookings: data.bookings || [], students: data.students || [],
         messages: data.messages || [], dormRooms: data.dormRooms || [], residents: data.residents || [],
-        maintenance: data.maintenance || [], announcements: data.announcements || []
+        maintenance: data.maintenance || [], announcements: data.announcements || [],
+        gallery: data.gallery || [], availableImages: data.availableImages || []
       });
       const edits = {};
       (data.rooms || []).forEach((r) => {
-        edits[r.id] = { totalRooms: r.totalRooms, occupiedSpots: r.occupiedSpots };
+        edits[r.id] = { title: r.title, price: r.price, totalRooms: r.totalRooms, occupiedSpots: r.occupiedSpots };
       });
       setRoomEdits(edits);
       onRoomsSync(data.rooms || []);
@@ -204,6 +226,48 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     setAccountModal({ isNew: true });
   };
 
+  const openNewRoomTypeModal = () => {
+    setRoomTypeForm({
+      id: null,
+      title: "",
+      price: "1 200 000 so‘m",
+      spotsPerRoom: "2",
+      totalRooms: "10",
+      occupiedSpots: "0",
+      floor: "4-qavat",
+      size: "26 m²",
+      bathroom: "Xona ichida shaxsiy sanuzel",
+      tag: "Tavsiya etiladi",
+      badgeType: "recommended",
+      image: "/images/room3.jpeg",
+      description: "Zamonaviy mebel, shaxsiy sanuzel, konditsioner va yuqori tezlikdagi Wi-Fi bilan jihozlangan yangi xona.",
+      features: "Shaxsiy sanuzel, Konditsioner, O‘qish stoli, Wi-Fi 500 Mbps",
+      initialRoomNumber: ""
+    });
+    setRoomTypeModal({ mode: "add" });
+  };
+
+  const openEditRoomTypeModal = (rt) => {
+    setRoomTypeForm({
+      id: rt.id,
+      title: rt.title || "",
+      price: rt.price || "",
+      spotsPerRoom: String(rt.spotsPerRoom || 2),
+      totalRooms: String(rt.totalRooms || 10),
+      occupiedSpots: String(rt.occupiedSpots || 0),
+      floor: rt.floor || "4-qavat",
+      size: rt.size || "24 m²",
+      bathroom: rt.bathroom || "Shaxsiy sanuzel",
+      tag: rt.tag || "Tavsiya etiladi",
+      badgeType: rt.badgeType || "recommended",
+      image: rt.image || "/images/room3.jpeg",
+      description: rt.description || "",
+      features: Array.isArray(rt.features) ? rt.features.join(", ") : "",
+      initialRoomNumber: ""
+    });
+    setRoomTypeModal({ mode: "edit" });
+  };
+
   const openEditAnnouncementModal = (ann) => {
     setAnnForm({
       id: ann.id,
@@ -286,7 +350,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
             <div className="admin-workspace-actions">
               {(section === "dashboard" || section === "dormRooms") && (
                 <>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRoomModalOpen(true)}><Plus size={14} /> Yangi xona</button>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={openNewRoomTypeModal}><Plus size={14} /> Yangi xona turi & narx</button>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setRoomModalOpen(true)}><Plus size={14} /> Yangi xona raqami</button>
                   <button type="button" className="btn btn-primary btn-sm" onClick={() => openAddResidentModal()}><Plus size={14} /> Talaba joylashtirish</button>
                 </>
               )}
@@ -323,7 +388,23 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
 
           {section === "dashboard" && <DashboardView overview={overview} totals={totals} roomsByFloor={roomsByFloor} onInspectRoom={setInspectedRoomId} onNavigate={setSection} busyId={busyId} runAdminRequest={runAdminRequest} />}
           {section === "bookings" && <AdminBookingsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onOpenUserFromBooking={openUserFromBooking} />}
-          {section === "dormRooms" && <AdminRoomsSection overview={overview} totals={totals} roomEdits={roomEdits} setRoomEdits={setRoomEdits} busyId={busyId} runAdminRequest={runAdminRequest} onInspectRoom={setInspectedRoomId} onAddResident={openAddResidentModal} onEditResident={openEditResidentModal} />}
+          {section === "dormRooms" && (
+            <AdminRoomsSection
+              overview={overview}
+              totals={totals}
+              roomEdits={roomEdits}
+              setRoomEdits={setRoomEdits}
+              busyId={busyId}
+              runAdminRequest={runAdminRequest}
+              onInspectRoom={setInspectedRoomId}
+              onAddResident={openAddResidentModal}
+              onEditResident={openEditResidentModal}
+              onOpenNewRoomType={openNewRoomTypeModal}
+              onOpenEditRoomType={openEditRoomTypeModal}
+              onOpenNewDormRoom={() => setRoomModalOpen(true)}
+              showToast={showToast}
+            />
+          )}
           {section === "residents" && <AdminResidentsSection overview={overview} totals={totals} filteredResidents={filteredResidents} residentSearch={residentSearch} setResidentSearch={setResidentSearch} paymentFilter={paymentFilter} setPaymentFilter={setPaymentFilter} courseFilter={courseFilter} setCourseFilter={setCourseFilter} busyId={busyId} runAdminRequest={runAdminRequest} onEditResident={openEditResidentModal} />}
           {section === "payments" && <AdminPaymentsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onEditResident={openEditResidentModal} showToast={showToast} />}
           {section === "maintenance" && <AdminMaintenanceSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} />}
@@ -336,10 +417,12 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
         inspectedRoom={inspectedRoom} setInspectedRoomId={setInspectedRoomId}
         openAddResidentModal={openAddResidentModal} openEditResidentModal={openEditResidentModal}
         roomModalOpen={roomModalOpen} setRoomModalOpen={setRoomModalOpen} newRoomForm={newRoomForm} setNewRoomForm={setNewRoomForm}
+        roomTypeModal={roomTypeModal} setRoomTypeModal={setRoomTypeModal} roomTypeForm={roomTypeForm} setRoomTypeForm={setRoomTypeForm}
         residentModal={residentModal} setResidentModal={setResidentModal} resForm={resForm} setResForm={setResForm} handleResidentSubmit={handleResidentSubmit}
         maintModalOpen={maintModalOpen} setMaintModalOpen={setMaintModalOpen} maintForm={maintForm} setMaintForm={setMaintForm}
         annModalOpen={annModalOpen} setAnnModalOpen={setAnnModalOpen} annForm={annForm} setAnnForm={setAnnForm}
         accountModal={accountModal} setAccountModal={setAccountModal} accountForm={accountForm} setAccountForm={setAccountForm}
+        showToast={showToast}
       />
     </div>
   );

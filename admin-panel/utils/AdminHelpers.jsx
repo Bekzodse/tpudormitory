@@ -39,6 +39,35 @@ export function formatUzs(amount) {
   return `${Math.round(amount).toLocaleString("ru-RU").replace(/,/g, " ")} so‘m`;
 }
 
+export function readRoomImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith("image/")) {
+      reject(new Error("Faqat rasm faylini tanlang (JPG, PNG, WEBP)."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Rasmni o‘qib bo‘lmadi."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Rasmni qayta ishlab bo‘lmadi."));
+      img.onload = () => {
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.88));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function downloadResidentsCsv(residents) {
   const headers = [
     "F.I.Sh.", "Xona", "Qavat", "Kurs", "Fakultet", "Telefon",
