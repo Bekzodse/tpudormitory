@@ -67,6 +67,7 @@ export default function App() {
   const [publicBottomTexts, setPublicBottomTexts] = useState([]);
   const [publicHomepage, setPublicHomepage] = useState(null);
   const [publicFaqs, setPublicFaqs] = useState(faqs);
+  const [publicFacilities, setPublicFacilities] = useState(facilitiesList);
 
   // Contact Form State
   const [contactForm, setContactForm] = useState({
@@ -81,6 +82,7 @@ export default function App() {
   // Auth & Student State
   const [authMode, setAuthMode] = useState(null);
   const [student, setStudent] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [supportChatOpen, setSupportChatOpen] = useState(false);
@@ -138,6 +140,7 @@ export default function App() {
         if (Array.isArray(data?.bottomTexts)) setPublicBottomTexts(data.bottomTexts);
         if (data?.homepage) setPublicHomepage(data.homepage);
         if (Array.isArray(data?.faqs) && data.faqs.length > 0) setPublicFaqs(data.faqs);
+        if (Array.isArray(data?.facilities) && data.facilities.length > 0) setPublicFacilities(data.facilities);
       })
       .catch(() => {});
   };
@@ -155,9 +158,11 @@ export default function App() {
           }
         } else if (window.location.hash === "#admin") {
           setActiveView("home");
+          setAuthMode("login");
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setAuthChecked(true));
 
     const handlePopState = () => {
       const hash = window.location.hash;
@@ -253,6 +258,14 @@ export default function App() {
     }
   };
 
+  const handleSessionExpired = () => {
+    setStudent(null);
+    setActiveView("home");
+    window.history.pushState(null, "", "#home");
+    setAuthMode("login");
+    showToast("Sessiya yakunlandi. Iltimos, qaytadan tizimga kiring.");
+  };
+
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     setStudent(null);
@@ -301,9 +314,9 @@ export default function App() {
   };
 
   const filteredFacilities = useMemo(() => {
-    if (facilityCategory === "all") return facilitiesList;
-    return facilitiesList.filter((f) => f.category === facilityCategory);
-  }, [facilityCategory]);
+    if (facilityCategory === "all") return publicFacilities;
+    return publicFacilities.filter((f) => f.category === facilityCategory);
+  }, [publicFacilities, facilityCategory]);
 
   const filteredGallery = useMemo(() => {
     if (galleryFilter === "all") return publicGallery;
@@ -352,7 +365,11 @@ export default function App() {
       />
 
       <main>
-        {activeView === "admin" && student?.role === "admin" ? (
+        {activeView === "admin" && !authChecked ? (
+          <div className="section-wrap" style={{ padding: "80px 20px", textAlign: "center", color: "var(--color-muted)" }}>
+            <strong>Sessiya tekshirilmoqda...</strong>
+          </div>
+        ) : activeView === "admin" && student?.role === "admin" ? (
           <AdminPanelView
             onRoomsSync={(inv) => {
               syncRoomsFromInventory(inv);
@@ -360,6 +377,7 @@ export default function App() {
             }}
             showToast={showToast}
             onAdminSync={setStudent}
+            onSessionExpired={handleSessionExpired}
           />
         ) : activeView === "rooms" ? (
           <RoomsPage
@@ -374,6 +392,7 @@ export default function App() {
         ) : activeView === "facilities" ? (
           <FacilitiesPage
             facilities={filteredFacilities}
+            totalCount={publicFacilities.length}
             category={facilityCategory}
             setCategory={setFacilityCategory}
             openBooking={openBookingModal}

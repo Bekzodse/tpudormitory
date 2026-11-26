@@ -5,6 +5,7 @@ import {
   formatSupportChat,
   getAnnouncements,
   getAvailableImages,
+  getFacilities,
   getFaqItems,
   getGalleryCategories,
   getGalleryPhotos,
@@ -30,7 +31,8 @@ router.get("/rooms", (_request, response) => {
     bottomTexts: getSiteBottomTexts(),
     availableImages: getAvailableImages(),
     homepage: getHomepageSettings(),
-    faqs: getFaqItems()
+    faqs: getFaqItems(),
+    facilities: getFacilities()
   });
 });
 
@@ -84,9 +86,14 @@ router.post("/bookings", (request, response) => {
   }
 
   let inv = null;
-  if (roomId) inv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(Number(roomId));
+  if (roomId && Number.isInteger(Number(roomId))) {
+    inv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(Number(roomId));
+  }
   if (!inv && roomTitle) inv = db.prepare("SELECT * FROM room_inventory WHERE title = ?").get(String(roomTitle).trim());
   if (!inv) inv = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC LIMIT 1").get();
+  if (!inv) {
+    return response.status(400).json({ message: "Hozircha bron qilish uchun mavjud xona turi yo‘q." });
+  }
 
   const session = getSession(request);
   const result = db.prepare(`

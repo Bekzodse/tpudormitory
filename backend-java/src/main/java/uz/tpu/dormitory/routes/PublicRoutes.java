@@ -21,6 +21,14 @@ public class PublicRoutes {
     public void handle(HttpExchange exchange, String path, String method) throws IOException {
         if ("/api/rooms".equals(path) && "GET".equals(method)) {
             handleGetRooms(exchange);
+        } else if ("/api/faqs".equals(path) && "GET".equals(method)) {
+            JsonHelper.sendJson(exchange, 200, "{\"faqs\":" + db.faqsToJson() + "}");
+        } else if ("/api/homepage".equals(path) && "GET".equals(method)) {
+            JsonHelper.sendJson(exchange, 200, "{\"homepage\":" + db.homepageToJson() + ",\"bottomTexts\":" + db.bottomTextsToJson() + "}");
+        } else if ("/api/gallery".equals(path) && "GET".equals(method)) {
+            JsonHelper.sendJson(exchange, 200, "{\"gallery\":" + db.galleryToJson() + ",\"galleryCategories\":" + db.galleryCategoriesToJson() + ",\"bottomTexts\":" + db.bottomTextsToJson() + "}");
+        } else if ("/api/announcements".equals(path) && "GET".equals(method)) {
+            JsonHelper.sendJson(exchange, 200, "{\"announcements\":" + db.announcementsToJson() + "}");
         } else if ("/api/bookings".equals(path) && "POST".equals(method)) {
             handleCreateBooking(exchange);
         } else if ("/api/contact".equals(path) && "POST".equals(method)) {
@@ -42,22 +50,16 @@ public class PublicRoutes {
         }
         roomsJson.append("]");
 
-        StringBuilder faqsJson = new StringBuilder("[");
-        for (int i = 0; i < db.faqs.size(); i++) {
-            if (i > 0) faqsJson.append(",");
-            FaqItem f = db.faqs.get(i);
-            faqsJson.append("{\"id\":").append(f.id)
-                    .append(",\"q\":").append(JsonHelper.quote(f.q))
-                    .append(",\"a\":").append(JsonHelper.quote(f.a)).append("}");
-        }
-        faqsJson.append("]");
-
         JsonHelper.sendJson(exchange, 200, "{"
                 + "\"rooms\":" + roomsJson + ","
+                + "\"dormRooms\":" + db.dormRoomsToJson(false) + ","
+                + "\"announcements\":" + db.announcementsToJson() + ","
                 + "\"gallery\":" + db.galleryToJson() + ","
                 + "\"galleryCategories\":" + db.galleryCategoriesToJson() + ","
                 + "\"bottomTexts\":" + db.bottomTextsToJson() + ","
-                + "\"faqs\":" + faqsJson + ","
+                + "\"homepage\":" + db.homepageToJson() + ","
+                + "\"faqs\":" + db.faqsToJson() + ","
+                + "\"facilities\":" + db.facilitiesToJson() + ","
                 + "\"availableImages\":" + JsonHelper.stringListJson(db.getAvailableImages())
                 + "}");
     }

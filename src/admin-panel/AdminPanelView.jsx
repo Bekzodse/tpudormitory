@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  CalendarDays, CreditCard, DoorOpen, Download,
+  Activity, CalendarDays, CreditCard, Database, DoorOpen, Download,
   Globe, Image as ImageIcon, LayoutDashboard, Megaphone, MessageSquare, Plus, Users, Wrench
 } from "lucide-react";
 import DashboardView from "../dashboard/DashboardView";
@@ -14,9 +14,11 @@ import AdminMaintenanceSection from "./sections/AdminMaintenanceSection";
 import AdminCommunitySection from "./sections/AdminCommunitySection";
 import AdminSiteContentSection from "./sections/AdminSiteContentSection";
 import AdminChatsSection from "./sections/AdminChatsSection";
+import AdminActivityLogSection from "./sections/AdminActivityLogSection";
+import AdminDatabaseSection from "./sections/AdminDatabaseSection";
 import AdminModals from "./modals/AdminModals";
 
-export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) {
+export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync, onSessionExpired }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [section, setSection] = useState("dashboard");
@@ -27,7 +29,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     rooms: [], bookings: [], students: [], messages: [],
     dormRooms: [], residents: [], maintenance: [], announcements: [],
     gallery: [], galleryCategories: [], bottomTexts: [],
-    availableImages: [], homepage: null, faqs: [], chats: []
+    availableImages: [], homepage: null, faqs: [], facilities: [], chats: [],
+    activityLogs: []
   });
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [roomEdits, setRoomEdits] = useState({});
@@ -42,9 +45,21 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
   const [roomModalOpen, setRoomModalOpen] = useState(false);
   const [roomTypeModal, setRoomTypeModal] = useState(null);
   const [residentModal, setResidentModal] = useState(null);
+  const [bookingModal, setBookingModal] = useState(null);
   const [maintModalOpen, setMaintModalOpen] = useState(false);
   const [annModalOpen, setAnnModalOpen] = useState(false);
+  const [messageModal, setMessageModal] = useState(null);
   const [accountModal, setAccountModal] = useState(null);
+
+  const [bookingForm, setBookingForm] = useState({
+    id: null, roomId: "1", studentName: "", phone: "", telegram: "", course: "1-kurs",
+    age: "", preferredRoomNumber: "", moveInDate: "", duration: "1 semestr",
+    notes: "", status: "pending", adminNote: ""
+  });
+  const [messageForm, setMessageForm] = useState({
+    id: null, firstName: "", lastName: "", phone: "+998 ", subject: "Yotoqxona bo‘yicha savol",
+    message: "", status: "new", adminNote: ""
+  });
 
   const [newRoomForm, setNewRoomForm] = useState({
     roomNumber: "", roomTypeId: "1", floor: "4", customPrice: "1 100 000 so‘m", image: "/images/room3.jpeg", description: ""
@@ -85,6 +100,10 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     setError("");
     try {
       const response = await fetch("/api/admin/overview", { credentials: "include" });
+      if (response.status === 401) {
+        if (onSessionExpired) onSessionExpired();
+        return;
+      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Admin ma’lumotlarini yuklab bo‘lmadi.");
       setOverview({
@@ -93,7 +112,8 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
         maintenance: data.maintenance || [], announcements: data.announcements || [],
         gallery: data.gallery || [], galleryCategories: data.galleryCategories || [],
         bottomTexts: data.bottomTexts || [], availableImages: data.availableImages || [],
-        homepage: data.homepage || null, faqs: data.faqs || [], chats: data.chats || []
+        homepage: data.homepage || null, faqs: data.faqs || [], facilities: data.facilities || [],
+        chats: data.chats || [], activityLogs: data.activityLogs || []
       });
       const edits = {};
       (data.rooms || []).forEach((r) => {
@@ -121,6 +141,10 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
         credentials: "include",
         body: body ? JSON.stringify(body) : undefined
       });
+      if (response.status === 401) {
+        if (onSessionExpired) onSessionExpired();
+        return null;
+      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Amalni bajarib bo‘lmadi.");
       if (successMsg) showToast(successMsg);
@@ -131,6 +155,25 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
       return null;
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const logClientContact = async ({ section: sec = "clients", clientName = "", clientPhone = "", channel = "Telefon", summary = "" }) => {
+    try {
+      const response = await fetch("/api/admin/activity-logs/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ section: sec, clientName, clientPhone, channel, summary })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data.activityLogs)) {
+          setOverview((prev) => ({ ...prev, activityLogs: data.activityLogs }));
+        }
+      }
+    } catch {
+      // ignore non-critical logging errors
     }
   };
 
@@ -286,6 +329,100 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
     setAnnModalOpen(true);
   };
 
+  const openNewBookingModal = () => {
+    setBookingForm({
+      id: null,
+      roomId: String(overview.rooms[0]?.id || "1"),
+      studentName: "",
+      phone: "+998 ",
+      telegram: "",
+      course: "1-kurs",
+      age: "",
+      preferredRoomNumber: "",
+      moveInDate: new Date().toISOString().slice(0, 10),
+      duration: "1 semestr",
+      notes: "",
+      status: "pending",
+      adminNote: ""
+    });
+    setBookingModal({ mode: "add" });
+  };
+
+  const openEditBookingModal = (b) => {
+    setBookingForm({
+      id: b.id,
+      roomId: String(b.room_id || overview.rooms[0]?.id || "1"),
+      studentName: b.student_name || "",
+      phone: b.phone || "",
+      telegram: b.telegram || "",
+      course: b.course || "1-kurs",
+      age: b.age ? String(b.age) : "",
+      preferredRoomNumber: b.preferred_room_number || "",
+      moveInDate: b.move_in_date || "",
+      duration: b.duration || "1 semestr",
+      notes: b.notes || "",
+      status: b.status || "pending",
+      adminNote: b.admin_note || ""
+    });
+    setBookingModal({ mode: "edit", data: b });
+  };
+
+  const openNewMaintModal = () => {
+    setMaintForm({
+      id: null,
+      roomNumber: overview.dormRooms[0]?.roomNumber || "301",
+      category: "Santexnika",
+      priority: "medium",
+      status: "open",
+      description: "",
+      adminNote: "",
+      reporterName: ""
+    });
+    setMaintModalOpen(true);
+  };
+
+  const openEditMaintModal = (m) => {
+    setMaintForm({
+      id: m.id,
+      roomNumber: m.roomNumber || "301",
+      category: m.category || "Santexnika",
+      priority: m.priority || "medium",
+      status: m.status || "open",
+      description: m.description || "",
+      adminNote: m.adminNote || "",
+      reporterName: m.reporterName || ""
+    });
+    setMaintModalOpen(true);
+  };
+
+  const openNewMessageModal = () => {
+    setMessageForm({
+      id: null,
+      firstName: "",
+      lastName: "",
+      phone: "+998 ",
+      subject: "Yotoqxona bo‘yicha savol",
+      message: "",
+      status: "new",
+      adminNote: ""
+    });
+    setMessageModal({ mode: "add" });
+  };
+
+  const openEditMessageModal = (m) => {
+    setMessageForm({
+      id: m.id,
+      firstName: m.first_name || "",
+      lastName: m.last_name || "",
+      phone: m.phone || "",
+      subject: m.subject || "Umumiy savol",
+      message: m.message || "",
+      status: m.status || "new",
+      adminNote: m.admin_note || ""
+    });
+    setMessageModal({ mode: "edit", data: m });
+  };
+
   const openUserFromBooking = (b) => {
     const matchedRes =
       (b.resident_id && overview.residents.find((r) => r.id === b.resident_id)) ||
@@ -335,28 +472,32 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
 
   const navItems = [
     { id: "dashboard", label: "Umumiy holat", icon: LayoutDashboard, badge: null },
+    { id: "activity", label: "Ishlar jurnali (Nazorat)", icon: Activity, badge: (overview.activityLogs || []).length || null },
     { id: "bookings", label: "Yangi so‘rovlar", icon: CalendarDays, badge: totals.pendingBookings || null, tone: totals.pendingBookings ? "is-warn" : "" },
     { id: "chats", label: "Chatlar (Support)", icon: MessageSquare, badge: unreadChatsCount || (overview.chats || []).length || null, tone: unreadChatsCount ? "is-alert" : "" },
     { id: "dormRooms", label: "Xonalar va joylar", icon: DoorOpen, badge: overview.dormRooms.length },
-    { id: "residents", label: "Yashovchi talabalar", icon: Users, badge: overview.residents.length },
+    { id: "residents", label: "Talabalar va Akkauntlar", icon: Users, badge: overview.residents.length },
     { id: "payments", label: "To‘lovlar va moliya", icon: CreditCard, badge: totals.overduePayCount || null, tone: totals.overduePayCount ? "is-alert" : "" },
     { id: "maintenance", label: "Texnik xizmat", icon: Wrench, badge: totals.openMaintCount || null, tone: totals.openMaintCount ? "is-warn" : "" },
     { id: "announcements", label: "E’lonlar va Xabarlar", icon: Megaphone, badge: overview.announcements.length + overview.messages.length },
     { id: "galleryManager", label: "Fotogalereya & Bo‘limlar", icon: ImageIcon, badge: (overview.gallery || []).length || null },
-    { id: "siteContent", label: "Bosh sahifa, Gaplar & FAQ", icon: Globe, badge: (overview.faqs || []).length || null }
+    { id: "siteContent", label: "Sayt, Qulayliklar & FAQ", icon: Globe, badge: (overview.faqs || []).length + (overview.facilities || []).length || null },
+    { id: "database", label: "Ma’lumotlar bazasi (DB)", icon: Database, badge: null }
   ];
 
   const sectionMeta = {
-    dashboard: { title: "Boshqaruv Paneli — Umumiy Ko‘rinish", subtitle: "Qavatlar bo‘yicha xona bandligi, kutilayotgan arizalar va texnik holatlarni bir qarashda nazorat qiling." },
-    bookings: { title: "Kelib Tushgan Bron So‘rovlari", subtitle: "Talaba arizalarini ko‘rib chiqing, izoh qoldiring va tasdiqlashda darhol bo‘sh xonaga joylashtiring." },
-    chats: { title: "Foydalanuvchilar bilan Support Chatlar", subtitle: "Ariza topshirgan va yashovchi talabalarning savollariga to‘g‘ridan-to‘g‘ri javob bering." },
-    dormRooms: { title: "Xona Raqamlari va Umumiy Fond", subtitle: "Har bir xona (201, 301, 401...) bo‘sh joylarini boshqaring yoki yangi xonalarni kiriting." },
-    residents: { title: "Yashovchi Talabalar Reestri", subtitle: "Barcha talabalarni qidirish, ma’lumotlarini tahrirlash, boshqa xonaga ko‘chirish va Excel (CSV) yuklash." },
-    payments: { title: "Oylik To‘lovlar va Moliya Nazorati", subtitle: "Yotoqxona tushum rejasini kuzating, to‘lovlarni tasdiqlang va qarzdorlarga eslatma yuboring." },
-    maintenance: { title: "Texnik Xizmat va Ta’mirlash", subtitle: "Xonalardagi santexnika, elektr, konditsioner va Wi-Fi nosozliklarini qayd eting va hal qiling." },
-    announcements: { title: "E’lonlar, Portal Akkauntlari va Xabarlar", subtitle: "Talabalar kabinetiga muhim e’lonlar joylang hamda saytdan kelgan murojaatlarni ko‘ring." },
-    galleryManager: { title: "Fotogalereya Bo‘limlari, Rasmlari va Pastki Gaplar", subtitle: "Fotogalereyada yangi bo‘limlar yarating, bo‘limlarga rasm va rasm ostidagi gaplarni qo‘shing." },
-    siteContent: { title: "Bosh Sahifa Matnlari, Rasmlari, Pastki Gaplar va Savol-Javoblar", subtitle: "Bosh sahifadagi sarlavhalar, 4 ta Hero rasmi, pastdagi gaplar hamda Savol-Javob (FAQ) bo‘limini boshqaring." }
+    dashboard: { title: "Boshqaruv Paneli — Umumiy Ko‘rinish", subtitle: "Qavatlar bo‘yicha xona bandligi, kutilayotgan arizalar, texnik holat va admin faoliyatini nazorat qiling." },
+    activity: { title: "Ishboshqaruvchi Nazorati — Admin Ishlar Jurnali", subtitle: "Admin nima yaratdi, nima tahrirladi, nima o‘chirdi va qaysi klientlar bilan bog‘langanini to‘liq ko‘ring." },
+    bookings: { title: "Kelib Tushgan Bron So‘rovlari", subtitle: "Yangi ariza yarating, mavjudlarini tahrirlang, o‘chiring yoki tasdiqlab bo‘sh xonaga joylashtiring." },
+    chats: { title: "Foydalanuvchilar bilan Support Chatlar", subtitle: "Yangi chat boshlang, talabalar savollariga javob bering, xabarlarni tahrirlang yoki o‘chiring." },
+    dormRooms: { title: "Xona Raqamlari va Umumiy Fond", subtitle: "Xona turlari va raqamlangan xonalarni (201, 301, 401...) yarating, tahrirlang va o‘chiring." },
+    residents: { title: "Talabalar Reestri va Portal Akkauntlari", subtitle: "Yashovchi talabalar va talaba portal akkauntlarini yarating, tahrirlang, o‘chiring hamda CSV yuklang." },
+    payments: { title: "Oylik To‘lovlar va Moliya Nazorati", subtitle: "To‘lovlarni yarating, tahrirlang, o‘chiring, tasdiqlang va qarzdorlarga eslatma yuboring." },
+    maintenance: { title: "Texnik Xizmat va Ta’mirlash", subtitle: "Texnik arizalarni yarating, tahrirlang, holatini yangilang va o‘chiring." },
+    announcements: { title: "E’lonlar, Portal Akkauntlari va Aloqa Xabarlari", subtitle: "E’lonlar, talaba akkauntlari va aloqa murojaatlarini to‘liq yarating, tahrirlang va o‘chiring." },
+    galleryManager: { title: "Fotogalereya Bo‘limlari, Rasmlari va Pastki Gaplar", subtitle: "Fotogalereyada bo‘limlar, rasmlar va rasm ostidagi gaplarni yarating, tahrirlang va o‘chiring." },
+    siteContent: { title: "Bosh Sahifa, Qulayliklar, Pastki Gaplar va FAQ", subtitle: "Bosh sahifa matnlari, Hero rasmlar, Qulayliklar (Facilities), pastki gaplar va FAQ bo‘limini to‘liq boshqaring." },
+    database: { title: "Ma’lumotlar Bazasi (SQLite) Boshqaruvi", subtitle: "Barcha jadvallarni ko‘ring, qatorlarni qo‘shing, tahrirlang, o‘chiring va baza butunligini tekshiring." }
   };
 
   return (
@@ -387,28 +528,47 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
                   <button type="button" className="btn btn-primary btn-sm" onClick={() => openAddResidentModal()}><Plus size={14} /> Talaba joylashtirish</button>
                 </>
               )}
+              {section === "bookings" && (
+                <button type="button" className="btn btn-primary btn-sm" onClick={openNewBookingModal}>
+                  <Plus size={14} /> Yangi ariza qo‘shish
+                </button>
+              )}
               {section === "residents" && (
                 <>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => { downloadResidentsCsv(filteredResidents); showToast("Talabalar ro‘yxati CSV faylga yuklandi!"); }}>
                     <Download size={14} /> Excel / CSV yuklash
                   </button>
-                  <button type="button" className="btn btn-primary btn-sm" onClick={() => openAddResidentModal()}><Plus size={14} /> Talaba qo‘shish</button>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={openNewAccountModal}><Plus size={14} /> Talaba akkaunti</button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => openAddResidentModal()}><Plus size={14} /> Xonaga joylashtirish</button>
                 </>
               )}
+              {section === "payments" && (
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => openAddResidentModal()}>
+                  <Plus size={14} /> Yangi talaba / to‘lov
+                </button>
+              )}
               {section === "maintenance" && (
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => setMaintModalOpen(true)}><Plus size={14} /> Texnik ariza qo‘shish</button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={openNewMaintModal}><Plus size={14} /> Texnik ariza qo‘shish</button>
               )}
               {section === "announcements" && (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => {
-                    setAnnForm({ title: "", category: "Umumiy", audience: "Barcha qavatlar", content: "", pinned: false });
-                    setAnnModalOpen(true);
-                  }}
-                >
-                  <Plus size={14} /> Yangi e’lon joylash
-                </button>
+                <>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={openNewMessageModal}>
+                    <Plus size={14} /> Yangi murojaat
+                  </button>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={openNewAccountModal}>
+                    <Plus size={14} /> Yangi talaba akkaunti
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      setAnnForm({ title: "", category: "Umumiy", audience: "Barcha qavatlar", content: "", pinned: false });
+                      setAnnModalOpen(true);
+                    }}
+                  >
+                    <Plus size={14} /> Yangi e’lon joylash
+                  </button>
+                </>
               )}
               <button type="button" className="btn btn-outline btn-sm" onClick={loadOverview} disabled={loading}>
                 {loading ? "Yangilanmoqda..." : "Yangilash"}
@@ -419,8 +579,9 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
           {error && <div className="auth-error-alert" role="alert">{error}</div>}
 
           {section === "dashboard" && <DashboardView overview={overview} totals={totals} roomsByFloor={roomsByFloor} onInspectRoom={setInspectedRoomId} onNavigate={setSection} busyId={busyId} runAdminRequest={runAdminRequest} />}
-          {section === "bookings" && <AdminBookingsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onOpenUserFromBooking={openUserFromBooking} onOpenChatFromBooking={openChatFromBooking} />}
-          {section === "chats" && <AdminChatsSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} selectedChatId={selectedChatId} setSelectedChatId={setSelectedChatId} />}
+          {section === "activity" && <AdminActivityLogSection overview={overview} showToast={showToast} />}
+          {section === "bookings" && <AdminBookingsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onOpenUserFromBooking={openUserFromBooking} onOpenChatFromBooking={openChatFromBooking} onNewBooking={openNewBookingModal} onEditBooking={openEditBookingModal} onLogContact={logClientContact} />}
+          {section === "chats" && <AdminChatsSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} selectedChatId={selectedChatId} setSelectedChatId={setSelectedChatId} onLogContact={logClientContact} />}
           {section === "dormRooms" && (
             <AdminRoomsSection
               overview={overview}
@@ -438,12 +599,13 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
               showToast={showToast}
             />
           )}
-          {section === "residents" && <AdminResidentsSection overview={overview} totals={totals} filteredResidents={filteredResidents} residentSearch={residentSearch} setResidentSearch={setResidentSearch} paymentFilter={paymentFilter} setPaymentFilter={setPaymentFilter} courseFilter={courseFilter} setCourseFilter={setCourseFilter} busyId={busyId} runAdminRequest={runAdminRequest} onEditResident={openEditResidentModal} />}
-          {section === "payments" && <AdminPaymentsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onEditResident={openEditResidentModal} showToast={showToast} />}
-          {section === "maintenance" && <AdminMaintenanceSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} />}
-          {section === "announcements" && <AdminCommunitySection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} onEditAccount={openEditAccountModal} onNewAccount={openNewAccountModal} onEditAnnouncement={openEditAnnouncementModal} showToast={showToast} />}
+          {section === "residents" && <AdminResidentsSection overview={overview} totals={totals} filteredResidents={filteredResidents} residentSearch={residentSearch} setResidentSearch={setResidentSearch} paymentFilter={paymentFilter} setPaymentFilter={setPaymentFilter} courseFilter={courseFilter} setCourseFilter={setCourseFilter} busyId={busyId} runAdminRequest={runAdminRequest} onEditResident={openEditResidentModal} onEditAccount={openEditAccountModal} onNewAccount={openNewAccountModal} onLogContact={logClientContact} showToast={showToast} />}
+          {section === "payments" && <AdminPaymentsSection overview={overview} totals={totals} busyId={busyId} runAdminRequest={runAdminRequest} onEditResident={openEditResidentModal} onLogContact={logClientContact} showToast={showToast} />}
+          {section === "maintenance" && <AdminMaintenanceSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} onEditMaintenance={openEditMaintModal} />}
+          {section === "announcements" && <AdminCommunitySection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} onEditAccount={openEditAccountModal} onNewAccount={openNewAccountModal} onEditAnnouncement={openEditAnnouncementModal} onNewMessage={openNewMessageModal} onEditMessage={openEditMessageModal} onLogContact={logClientContact} showToast={showToast} />}
           {section === "galleryManager" && <AdminSiteContentSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} showToast={showToast} initialTab="gallery" />}
           {section === "siteContent" && <AdminSiteContentSection overview={overview} busyId={busyId} runAdminRequest={runAdminRequest} showToast={showToast} initialTab="homepage" />}
+          {section === "database" && <AdminDatabaseSection showToast={showToast} onSessionExpired={onSessionExpired} onOverviewRefresh={loadOverview} />}
         </main>
       </div>
 
@@ -454,8 +616,10 @@ export default function AdminPanelView({ onRoomsSync, showToast, onAdminSync }) 
         roomModalOpen={roomModalOpen} setRoomModalOpen={setRoomModalOpen} newRoomForm={newRoomForm} setNewRoomForm={setNewRoomForm}
         roomTypeModal={roomTypeModal} setRoomTypeModal={setRoomTypeModal} roomTypeForm={roomTypeForm} setRoomTypeForm={setRoomTypeForm}
         residentModal={residentModal} setResidentModal={setResidentModal} resForm={resForm} setResForm={setResForm} handleResidentSubmit={handleResidentSubmit}
+        bookingModal={bookingModal} setBookingModal={setBookingModal} bookingForm={bookingForm} setBookingForm={setBookingForm}
         maintModalOpen={maintModalOpen} setMaintModalOpen={setMaintModalOpen} maintForm={maintForm} setMaintForm={setMaintForm}
         annModalOpen={annModalOpen} setAnnModalOpen={setAnnModalOpen} annForm={annForm} setAnnForm={setAnnForm}
+        messageModal={messageModal} setMessageModal={setMessageModal} messageForm={messageForm} setMessageForm={setMessageForm}
         accountModal={accountModal} setAccountModal={setAccountModal} accountForm={accountForm} setAccountForm={setAccountForm}
         showToast={showToast}
       />

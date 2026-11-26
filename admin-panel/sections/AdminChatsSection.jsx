@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { DoorOpen, MessageSquare, Phone, Send, Trash2, UserCircle } from "lucide-react";
+import { Check, DoorOpen, MessageSquare, Pencil, Phone, Plus, Send, Trash2, X } from "lucide-react";
 import { SectionTotalsBar } from "../utils/AdminHelpers";
 
 const QUICK_REPLIES = [
@@ -14,11 +14,36 @@ export default function AdminChatsSection({
   busyId,
   runAdminRequest,
   selectedChatId,
-  setSelectedChatId
+  setSelectedChatId,
+  onLogContact
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState("all");
   const [replyText, setReplyText] = useState("");
+
+  // Create new chat form state
+  const [showNewChatForm, setShowNewChatForm] = useState(false);
+  const [newChatForm, setNewChatForm] = useState({
+    studentName: "",
+    phone: "+998 ",
+    course: "1-kurs",
+    assignedRoomNumber: "",
+    initialMessage: ""
+  });
+
+  // Edit active chat info state
+  const [editingChatInfo, setEditingChatInfo] = useState(false);
+  const [chatInfoDraft, setChatInfoDraft] = useState({
+    studentName: "",
+    phone: "",
+    course: "",
+    assignedRoomNumber: "",
+    status: "open"
+  });
+
+  // Edit individual message state
+  const [editingMsgId, setEditingMsgId] = useState(null);
+  const [editingMsgText, setEditingMsgText] = useState("");
 
   const chats = overview.chats || [];
 
@@ -53,7 +78,39 @@ export default function AdminChatsSection({
         busyKey: `read-chat-${activeChat.id}`
       });
     }
+    setEditingChatInfo(false);
+    setEditingMsgId(null);
   }, [activeChat?.id]);
+
+  const handleCreateChat = async (e) => {
+    e.preventDefault();
+    if (!newChatForm.studentName.trim()) return;
+    const res = await runAdminRequest({
+      url: "/api/admin/chats",
+      method: "POST",
+      body: newChatForm,
+      busyKey: "create-chat",
+      successMsg: `${newChatForm.studentName} bilan yangi chat yaratildi!`
+    });
+    if (res) {
+      if (res.chat?.id) setSelectedChatId(res.chat.id);
+      setNewChatForm({ studentName: "", phone: "+998 ", course: "1-kurs", assignedRoomNumber: "", initialMessage: "" });
+      setShowNewChatForm(false);
+    }
+  };
+
+  const handleSaveChatInfo = async (e) => {
+    e.preventDefault();
+    if (!activeChat) return;
+    const ok = await runAdminRequest({
+      url: `/api/admin/chats/${activeChat.id}`,
+      method: "PATCH",
+      body: chatInfoDraft,
+      busyKey: `edit-chat-${activeChat.id}`,
+      successMsg: "Chat ma’lumotlari yangilandi!"
+    });
+    if (ok) setEditingChatInfo(false);
+  };
 
   const handleSendReply = async (e) => {
     e.preventDefault();
@@ -86,9 +143,74 @@ export default function AdminChatsSection({
         ]}
       />
 
+      {showNewChatForm && (
+        <section className="admin-panel-card" style={{ marginBottom: 16 }}>
+          <div className="admin-panel-card-head">
+            <h2><Plus size={18} /> Yangi klient / talaba bilan chat boshlash</h2>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowNewChatForm(false)}>
+              <X size={14} /> Yopish
+            </button>
+          </div>
+          <form className="admin-modal-form" onSubmit={handleCreateChat}>
+            <label className="input-group">
+              <span>Klient / Talaba F.I.Sh. *</span>
+              <input
+                required
+                placeholder="Masalan: Jasur Karimov"
+                value={newChatForm.studentName}
+                onChange={(e) => setNewChatForm((p) => ({ ...p, studentName: e.target.value }))}
+              />
+            </label>
+            <label className="input-group">
+              <span>Telefon raqami</span>
+              <input
+                placeholder="+998 90 123-45-67"
+                value={newChatForm.phone}
+                onChange={(e) => setNewChatForm((p) => ({ ...p, phone: e.target.value }))}
+              />
+            </label>
+            <label className="input-group">
+              <span>Kursi</span>
+              <input
+                placeholder="1-kurs"
+                value={newChatForm.course}
+                onChange={(e) => setNewChatForm((p) => ({ ...p, course: e.target.value }))}
+              />
+            </label>
+            <label className="input-group">
+              <span>Xona raqami (ixtiyoriy)</span>
+              <input
+                placeholder="401"
+                value={newChatForm.assignedRoomNumber}
+                onChange={(e) => setNewChatForm((p) => ({ ...p, assignedRoomNumber: e.target.value }))}
+              />
+            </label>
+            <label className="input-group is-full">
+              <span>Birinchi xabar (ixtiyoriy)</span>
+              <input
+                placeholder="Assalomu alaykum! Siz bilan yotoqxona bo‘yicha bog‘lanyapmiz..."
+                value={newChatForm.initialMessage}
+                onChange={(e) => setNewChatForm((p) => ({ ...p, initialMessage: e.target.value }))}
+              />
+            </label>
+            <button type="submit" className="btn btn-primary btn-sm is-full" disabled={busyId === "create-chat"}>
+              <Plus size={14} /> Chatni yaratish
+            </button>
+          </form>
+        </section>
+      )}
+
       <div className="admin-chat-messenger">
         <aside className="admin-chat-sidebar">
           <div className="admin-chat-sidebar-head">
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              style={{ width: "100%", justifyContent: "center", marginBottom: 8 }}
+              onClick={() => setShowNewChatForm((v) => !v)}
+            >
+              <Plus size={14} /> Yangi chat yaratish
+            </button>
             <input
               type="search"
               value={searchQuery}
@@ -187,10 +309,44 @@ export default function AdminChatsSection({
                     </span>
                   )}
                   {activeChat.phone && (
-                    <a href={`tel:${activeChat.phone.replace(/\s+/g, "")}`} className="booking-contact-link">
+                    <a
+                      href={`tel:${activeChat.phone.replace(/\s+/g, "")}`}
+                      className="booking-contact-link"
+                      onClick={() =>
+                        onLogContact &&
+                        onLogContact({
+                          section: "chats",
+                          clientName: activeChat.studentName,
+                          clientPhone: activeChat.phone,
+                          channel: "Telefon qo‘ng‘irog‘i",
+                          summary: `Support chat orqali ${activeChat.studentName} ga qo‘ng‘iroq qildi`
+                        })
+                      }
+                    >
                       <Phone size={13} /> {activeChat.phone}
                     </a>
                   )}
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    title="Chat klient ma’lumotlarini tahrirlash"
+                    onClick={() => {
+                      if (editingChatInfo) {
+                        setEditingChatInfo(false);
+                      } else {
+                        setChatInfoDraft({
+                          studentName: activeChat.studentName || "",
+                          phone: activeChat.phone || "",
+                          course: activeChat.course || "",
+                          assignedRoomNumber: activeChat.assignedRoomNumber || "",
+                          status: activeChat.status || "open"
+                        });
+                        setEditingChatInfo(true);
+                      }
+                    }}
+                  >
+                    <Pencil size={12} /> Tahrirlash
+                  </button>
                   <button
                     type="button"
                     className="avatar-remove-btn"
@@ -210,12 +366,59 @@ export default function AdminChatsSection({
                 </div>
               </header>
 
+              {editingChatInfo && (
+                <form
+                  className="admin-modal-form"
+                  style={{ padding: "12px 16px", background: "#f7faff", borderBottom: "1px solid #e2ecfc", margin: 0 }}
+                  onSubmit={handleSaveChatInfo}
+                >
+                  <label className="input-group">
+                    <span>Ism-familiya</span>
+                    <input
+                      required
+                      value={chatInfoDraft.studentName}
+                      onChange={(e) => setChatInfoDraft((p) => ({ ...p, studentName: e.target.value }))}
+                    />
+                  </label>
+                  <label className="input-group">
+                    <span>Telefon</span>
+                    <input
+                      value={chatInfoDraft.phone}
+                      onChange={(e) => setChatInfoDraft((p) => ({ ...p, phone: e.target.value }))}
+                    />
+                  </label>
+                  <label className="input-group">
+                    <span>Kurs</span>
+                    <input
+                      value={chatInfoDraft.course}
+                      onChange={(e) => setChatInfoDraft((p) => ({ ...p, course: e.target.value }))}
+                    />
+                  </label>
+                  <label className="input-group">
+                    <span>Biriktirilgan xona</span>
+                    <input
+                      value={chatInfoDraft.assignedRoomNumber}
+                      onChange={(e) => setChatInfoDraft((p) => ({ ...p, assignedRoomNumber: e.target.value }))}
+                    />
+                  </label>
+                  <div className="is-full" style={{ display: "flex", gap: 8 }}>
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={busyId === `edit-chat-${activeChat.id}`}>
+                      <Check size={13} /> Saqlash
+                    </button>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingChatInfo(false)}>
+                      Bekor
+                    </button>
+                  </div>
+                </form>
+              )}
+
               <div className="admin-chat-messages-box">
                 {(activeChat.messages || []).length === 0 ? (
                   <div className="admin-dorm-empty">Hali xabarlar yo‘q. Birinchi bo‘lib yozishingiz mumkin.</div>
                 ) : (
                   activeChat.messages.map((m) => {
                     const isAdmin = m.senderRole === "admin";
+                    const isEditingThis = editingMsgId === m.id;
                     return (
                       <div
                         key={m.id}
@@ -224,9 +427,67 @@ export default function AdminChatsSection({
                         <div className={`chat-bubble ${isAdmin ? "is-admin" : "is-student"}`}>
                           <div className="chat-bubble-head">
                             <b>{m.senderName}</b>
-                            <small>{new Date(m.createdAt + "Z").toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}</small>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <small>{new Date(m.createdAt + "Z").toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}</small>
+                              <button
+                                type="button"
+                                className="chat-msg-action-btn"
+                                title="Xabarni tahrirlash"
+                                onClick={() => {
+                                  setEditingMsgId(m.id);
+                                  setEditingMsgText(m.message);
+                                }}
+                              >
+                                <Pencil size={11} />
+                              </button>
+                              <button
+                                type="button"
+                                className="chat-msg-action-btn"
+                                title="Xabarni o‘chirish"
+                                onClick={() =>
+                                  runAdminRequest({
+                                    url: `/api/admin/chats/${activeChat.id}/messages/${m.id}`,
+                                    method: "DELETE",
+                                    busyKey: `del-cmsg-${m.id}`,
+                                    successMsg: "Xabar o‘chirildi."
+                                  })
+                                }
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
                           </div>
-                          <p>{m.message}</p>
+                          {isEditingThis ? (
+                            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                              <input
+                                type="text"
+                                value={editingMsgText}
+                                onChange={(e) => setEditingMsgText(e.target.value)}
+                                style={{ flex: 1, padding: "4px 8px", borderRadius: 8, border: "1px solid #cbd5e1", color: "#0f172a" }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                onClick={async () => {
+                                  const ok = await runAdminRequest({
+                                    url: `/api/admin/chats/${activeChat.id}/messages/${m.id}`,
+                                    method: "PATCH",
+                                    body: { message: editingMsgText },
+                                    busyKey: `edit-cmsg-${m.id}`,
+                                    successMsg: "Xabar yangilandi!"
+                                  });
+                                  if (ok) setEditingMsgId(null);
+                                }}
+                              >
+                                <Check size={12} />
+                              </button>
+                              <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingMsgId(null)}>
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <p>{m.message}</p>
+                          )}
                         </div>
                       </div>
                     );

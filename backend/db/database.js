@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
-import { encryptSecret, hashPassword } from "../utils/auth.js";
+import { attachSessionDb, encryptSecret, hashPassword } from "../utils/auth.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const dataDir = path.join(root, "backend", "data");
@@ -11,6 +11,7 @@ fs.mkdirSync(dataDir, { recursive: true });
 
 export const db = new Database(dbFilePath);
 db.pragma("journal_mode = WAL");
+db.pragma("busy_timeout = 5000");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS authorized_students (
@@ -193,7 +194,40 @@ db.exec(`
     message TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE IF NOT EXISTS facilities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    icon_name TEXT NOT NULL DEFAULT 'Wifi',
+    category TEXT NOT NULL DEFAULT 'amenity',
+    title TEXT NOT NULL,
+    sub TEXT NOT NULL DEFAULT '',
+    badge TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS admin_activity_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER,
+    admin_login TEXT NOT NULL DEFAULT 'AdminTPU',
+    admin_name TEXT NOT NULL DEFAULT 'TPU Administrator',
+    action_type TEXT NOT NULL CHECK (action_type IN ('create', 'update', 'delete', 'contact')),
+    section TEXT NOT NULL,
+    entity_label TEXT NOT NULL DEFAULT '',
+    target_name TEXT NOT NULL DEFAULT '',
+    client_name TEXT NOT NULL DEFAULT '',
+    client_phone TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL,
+    details_json TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    account_id INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
 `);
+
+attachSessionDb(db);
 
 const accountCols = db.prepare("PRAGMA table_info(accounts)").all().map((c) => c.name);
 if (!accountCols.includes("age")) db.exec("ALTER TABLE accounts ADD COLUMN age INTEGER");
@@ -635,6 +669,24 @@ function seedDefaults() {
       insertMaint.run("201", "Internet / Wi-Fi", "201-xona yaqinidagi router signalini qayta sozlash", "low", "resolved");
     })();
   }
+
+  if ((db.prepare("SELECT COUNT(*) AS cnt FROM facilities").get()?.cnt || 0) === 0) {
+    const insFac = db.prepare(`
+      INSERT INTO facilities (icon_name, category, title, sub, badge, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const defaultFacilities = [
+      ["Wifi", "study", "Yuqori tezlikdagi Wi-Fi", "Yotoqxona bo‘ylab 500 Mbit/s tezlikdagi uzluksiz optik tolali internet.", "500 Mbit/s", 1],
+      ["ShieldCheck", "security", "24/7 Smart Xavfsizlik", "Smart Face-ID kirish nazorati, 120+ videokuzatuv kameralari va professional qo‘riqlash.", "Face ID", 2],
+      ["Utensils", "dining", "Zamonaviy oshxonalar", "Har bir qavatda induksion plitalar, mikroto‘lqinli pechlar va keng muzlatgichlar.", "Har qavatda", 3],
+      ["WashingMachine", "amenity", "Kir yuvish majmuasi", "Avtomatik kir yuvish va quritish mashinalari hamda dazmollash zonalari bepul.", "Bepul", 4],
+      ["Dumbbell", "sports", "Sport & Fitness zali", "Kardio va kuch mashg‘ulotlari trenajyorlari hamda ochiq street-workout maydonchasi.", "24/7 ochiq", 5],
+      ["BookOpen", "study", "Kutubxona & Kovorking", "Tinch mutolaa zali, guruh loyihalari uchun kovorking maydoni va kitoblar fondi.", "Sokin zona", 6],
+      ["Armchair", "amenity", "Talabalar dam olish zali", "Katta ekran, qulay yumshoq divanlar, stol o‘yinlari va dam olish muhiti.", "Chill lounge", 7],
+      ["CarFront", "amenity", "Xavfsiz avtoturargoh", "Velosiped, skuter va avtomobillar uchun 24/7 videokuzatuv ostidagi qulay turargoh.", "Kuzatuv ostida", 8]
+    ];
+    for (const f of defaultFacilities) insFac.run(...f);
+  }
 }
 
 export async function initDatabase() {
@@ -678,27 +730,35 @@ export function formatPriceUzs(num) {
 export function saveUploadedImage(imageInput, prefix = "room") {
   if (!imageInput || typeof imageInput !== "string") return null;
   const trimmed = imageInput.trim();
+  if (!trimmed) return null;
   if (!trimmed.startsWith("data:image/")) {
     return trimmed;
   }
   const match = trimmed.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
   if (!match) return null;
-  const rawExt = match[1].toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
-  const ext = ["jpg", "png", "webp", "gif", "svg"].includes(rawExt) ? rawExt : "jpg";
-  const buffer = Buffer.from(match[2], "base64");
-  const fileName = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+  try {
+    const rawExt = match[1].toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
+    const ext = ["jpg", "png", "webp", "gif", "svg"].includes(rawExt) ? rawExt : "jpg";
+    const buffer = Buffer.from(match[2], "base64");
+    if (!buffer.length) return null;
+    const safePrefix = String(prefix || "room").replace(/[^a-zA-Z0-9_-]/g, "") || "room";
+    const fileName = `${safePrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
 
-  const pubUploadDir = path.join(root, "public", "images", "uploads");
-  fs.mkdirSync(pubUploadDir, { recursive: true });
-  fs.writeFileSync(path.join(pubUploadDir, fileName), buffer);
+    const pubUploadDir = path.join(root, "public", "images", "uploads");
+    fs.mkdirSync(pubUploadDir, { recursive: true });
+    fs.writeFileSync(path.join(pubUploadDir, fileName), buffer);
 
-  const distDir = path.join(root, "dist", "images", "uploads");
-  if (fs.existsSync(path.join(root, "dist"))) {
-    fs.mkdirSync(distDir, { recursive: true });
-    fs.writeFileSync(path.join(distDir, fileName), buffer);
+    const distDir = path.join(root, "dist", "images", "uploads");
+    if (fs.existsSync(path.join(root, "dist"))) {
+      fs.mkdirSync(distDir, { recursive: true });
+      fs.writeFileSync(path.join(distDir, fileName), buffer);
+    }
+
+    return `/images/uploads/${fileName}`;
+  } catch (err) {
+    console.error("[Image Upload Error]", err.message || err);
+    return null;
   }
-
-  return `/images/uploads/${fileName}`;
 }
 
 export function getAvailableImages() {
@@ -851,6 +911,84 @@ export function getFaqItems() {
     sortOrder: f.sort_order,
     createdAt: f.created_at
   }));
+}
+
+export function getFacilities() {
+  return db.prepare("SELECT * FROM facilities ORDER BY sort_order ASC, id ASC").all().map((f) => ({
+    id: f.id,
+    iconName: f.icon_name || "Wifi",
+    category: f.category || "amenity",
+    title: f.title,
+    sub: f.sub || "",
+    badge: f.badge || "",
+    sortOrder: f.sort_order,
+    createdAt: f.created_at
+  }));
+}
+
+export function logAdminActivity({
+  admin = null,
+  actionType = "update",
+  section = "general",
+  entityLabel = "",
+  targetName = "",
+  clientName = "",
+  clientPhone = "",
+  summary = "",
+  details = null
+}) {
+  const safeAction = ["create", "update", "delete", "contact"].includes(actionType) ? actionType : "update";
+  const adminId = admin?.id || null;
+  const adminLogin = admin?.login || "AdminTPU";
+  const adminName = admin ? `${admin.first_name || ""} ${admin.last_name || ""}`.trim() || adminLogin : "TPU Administrator";
+  const cleanSummary = String(summary || "").trim() || `${section}: ${safeAction}`;
+  const detailsJson = details ? JSON.stringify(details) : null;
+
+  const res = db.prepare(`
+    INSERT INTO admin_activity_logs (
+      admin_id, admin_login, admin_name, action_type, section, entity_label,
+      target_name, client_name, client_phone, summary, details_json
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    adminId,
+    adminLogin,
+    adminName,
+    safeAction,
+    String(section || "general").trim(),
+    String(entityLabel || "").trim(),
+    String(targetName || "").trim(),
+    String(clientName || "").trim(),
+    String(clientPhone || "").trim(),
+    cleanSummary,
+    detailsJson
+  );
+  return res.lastInsertRowid;
+}
+
+export function getAdminActivityLogs(limit = 300) {
+  const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 300));
+  return db.prepare("SELECT * FROM admin_activity_logs ORDER BY id DESC LIMIT ?").all(safeLimit).map((row) => {
+    let details = null;
+    if (row.details_json) {
+      try { details = JSON.parse(row.details_json); } catch { details = null; }
+    }
+    return {
+      id: row.id,
+      adminId: row.admin_id,
+      adminLogin: row.admin_login,
+      adminName: row.admin_name,
+      actionType: row.action_type,
+      section: row.section,
+      entityLabel: row.entity_label || "",
+      targetName: row.target_name || "",
+      clientName: row.client_name || "",
+      clientPhone: row.client_phone || "",
+      summary: row.summary,
+      details,
+      createdAt: row.created_at
+    };
+  });
 }
 
 export function normalizePhoneKey(phone) {

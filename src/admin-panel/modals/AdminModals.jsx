@@ -84,6 +84,10 @@ export default function AdminModals({
   resForm,
   setResForm,
   handleResidentSubmit,
+  bookingModal,
+  setBookingModal,
+  bookingForm,
+  setBookingForm,
   maintModalOpen,
   setMaintModalOpen,
   maintForm,
@@ -92,6 +96,10 @@ export default function AdminModals({
   setAnnModalOpen,
   annForm,
   setAnnForm,
+  messageModal,
+  setMessageModal,
+  messageForm,
+  setMessageForm,
   accountModal,
   setAccountModal,
   accountForm,
@@ -628,23 +636,128 @@ export default function AdminModals({
         </div>
       )}
 
-      {maintModalOpen && (
-        <div className="modal-backdrop" onClick={() => setMaintModalOpen(false)}>
+      {bookingModal && (
+        <div className="modal-backdrop" onClick={() => setBookingModal(null)}>
           <div className="modal-card admin-modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => setMaintModalOpen(false)} aria-label="Yopish"><X size={20} /></button>
-            <h2 style={{ margin: "0 0 6px", color: "var(--blue-navy)" }}>Yangi texnik xizmat so‘rovi</h2>
+            <button className="modal-close-btn" onClick={() => setBookingModal(null)} aria-label="Yopish"><X size={20} /></button>
+            <h2 style={{ margin: "0 0 6px", color: "var(--blue-navy)" }}>
+              {bookingModal.mode === "edit" ? `#${bookingForm.id} — Bron arizasini tahrirlash` : "Yangi bron arizasi yaratish"}
+            </h2>
             <form
               className="admin-modal-form"
               onSubmit={async (e) => {
                 e.preventDefault();
+                const isEdit = bookingModal.mode === "edit";
                 const ok = await runAdminRequest({
-                  url: "/api/admin/maintenance",
+                  url: isEdit ? `/api/admin/bookings/${bookingForm.id}` : "/api/admin/bookings",
+                  method: isEdit ? "PATCH" : "POST",
+                  body: {
+                    ...bookingForm,
+                    roomId: Number(bookingForm.roomId),
+                    age: bookingForm.age ? Number(bookingForm.age) : null
+                  },
+                  busyKey: isEdit ? `edit-booking-${bookingForm.id}` : "new-booking",
+                  successMsg: isEdit ? "Ariza ma’lumotlari yangilandi!" : "Yangi bron arizasi yaratildi!"
+                });
+                if (ok) setBookingModal(null);
+              }}
+            >
+              <label className="input-group">
+                <span>Talaba F.I.Sh. *</span>
+                <input required value={bookingForm.studentName} onChange={(e) => setBookingForm((p) => ({ ...p, studentName: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Telefon raqam *</span>
+                <input required value={bookingForm.phone} onChange={(e) => setBookingForm((p) => ({ ...p, phone: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Telegram</span>
+                <input placeholder="@username" value={bookingForm.telegram} onChange={(e) => setBookingForm((p) => ({ ...p, telegram: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Kursi</span>
+                <select value={bookingForm.course} onChange={(e) => setBookingForm((p) => ({ ...p, course: e.target.value }))}>
+                  <option value="1-kurs">1-kurs</option>
+                  <option value="2-kurs">2-kurs</option>
+                  <option value="3-kurs">3-kurs</option>
+                  <option value="4-kurs">4-kurs</option>
+                  <option value="Magistratura 1-kurs">Magistratura 1-kurs</option>
+                  <option value="Magistratura 2-kurs">Magistratura 2-kurs</option>
+                </select>
+              </label>
+              <label className="input-group">
+                <span>Yoshi</span>
+                <input type="number" min={15} max={60} value={bookingForm.age} onChange={(e) => setBookingForm((p) => ({ ...p, age: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Xona turi *</span>
+                <select value={bookingForm.roomId} onChange={(e) => setBookingForm((p) => ({ ...p, roomId: e.target.value }))}>
+                  {overview.rooms.map((rt) => (
+                    <option key={rt.id} value={rt.id}>{rt.title} ({rt.price})</option>
+                  ))}
+                </select>
+              </label>
+              <label className="input-group">
+                <span>So‘ralgan xona raqami</span>
+                <input placeholder="Masalan: 401" value={bookingForm.preferredRoomNumber} onChange={(e) => setBookingForm((p) => ({ ...p, preferredRoomNumber: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Ko‘chib o‘tish sanasi</span>
+                <input type="date" value={bookingForm.moveInDate} onChange={(e) => setBookingForm((p) => ({ ...p, moveInDate: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Muddati</span>
+                <select value={bookingForm.duration} onChange={(e) => setBookingForm((p) => ({ ...p, duration: e.target.value }))}>
+                  <option value="1 oy">1 oy</option>
+                  <option value="1 semestr">1 semestr</option>
+                  <option value="1 o‘quv yili">1 o‘quv yili</option>
+                </select>
+              </label>
+              <label className="input-group">
+                <span>Holati</span>
+                <select value={bookingForm.status} onChange={(e) => setBookingForm((p) => ({ ...p, status: e.target.value }))}>
+                  <option value="pending">Kutilmoqda</option>
+                  <option value="approved">Qabul qilindi</option>
+                  <option value="rejected">Rad etildi</option>
+                </select>
+              </label>
+              <label className="input-group is-full">
+                <span>Talaba izohi</span>
+                <textarea rows={2} value={bookingForm.notes} onChange={(e) => setBookingForm((p) => ({ ...p, notes: e.target.value }))} />
+              </label>
+              <label className="input-group is-full">
+                <span>Admin izohi</span>
+                <input value={bookingForm.adminNote} onChange={(e) => setBookingForm((p) => ({ ...p, adminNote: e.target.value }))} />
+              </label>
+              <button type="submit" className="btn btn-primary is-full" disabled={busyId === "new-booking" || busyId === `edit-booking-${bookingForm.id}`}>
+                {bookingModal.mode === "edit" ? "O‘zgarishlarni saqlash" : "Arizani yaratish"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {maintModalOpen && (
+        <div className="modal-backdrop" onClick={() => setMaintModalOpen(false)}>
+          <div className="modal-card admin-modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setMaintModalOpen(false)} aria-label="Yopish"><X size={20} /></button>
+            <h2 style={{ margin: "0 0 6px", color: "var(--blue-navy)" }}>
+              {maintForm.id ? `Texnik so‘rovni tahrirlash (#${maintForm.id})` : "Yangi texnik xizmat so‘rovi"}
+            </h2>
+            <form
+              className="admin-modal-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const isEdit = Boolean(maintForm.id);
+                const ok = await runAdminRequest({
+                  url: isEdit ? `/api/admin/maintenance/${maintForm.id}` : "/api/admin/maintenance",
+                  method: isEdit ? "PATCH" : "POST",
                   body: maintForm,
-                  busyKey: "new-maint",
-                  successMsg: "Texnik so‘rov yaratildi!"
+                  busyKey: isEdit ? `edit-maint-${maintForm.id}` : "new-maint",
+                  successMsg: isEdit ? "Texnik so‘rov yangilandi!" : "Texnik so‘rov yaratildi!"
                 });
                 if (ok) {
-                  setMaintForm((p) => ({ ...p, description: "" }));
+                  setMaintForm((p) => ({ ...p, id: null, description: "", adminNote: "", reporterName: "" }));
                   setMaintModalOpen(false);
                 }
               }}
@@ -667,7 +780,7 @@ export default function AdminModals({
                   <option value="Mebel / Qulf">Mebel / Qulf</option>
                 </select>
               </label>
-              <label className="input-group is-full">
+              <label className="input-group">
                 <span>Muhimlik darajasi</span>
                 <select value={maintForm.priority} onChange={(e) => setMaintForm((p) => ({ ...p, priority: e.target.value }))}>
                   <option value="high">Shoshilinch</option>
@@ -675,11 +788,95 @@ export default function AdminModals({
                   <option value="low">Past</option>
                 </select>
               </label>
+              {maintForm.id && (
+                <label className="input-group">
+                  <span>Holati</span>
+                  <select value={maintForm.status || "open"} onChange={(e) => setMaintForm((p) => ({ ...p, status: e.target.value }))}>
+                    <option value="open">Ochiq</option>
+                    <option value="in_progress">Jarayonda</option>
+                    <option value="resolved">Hal qilindi</option>
+                  </select>
+                </label>
+              )}
+              <label className="input-group is-full">
+                <span>Murojaat qilgan talaba (ixtiyoriy)</span>
+                <input placeholder="Masalan: Jasur Karimov" value={maintForm.reporterName || ""} onChange={(e) => setMaintForm((p) => ({ ...p, reporterName: e.target.value }))} />
+              </label>
               <label className="input-group is-full">
                 <span>Muammo tavsifi *</span>
                 <textarea rows={3} required value={maintForm.description} onChange={(e) => setMaintForm((p) => ({ ...p, description: e.target.value }))} />
               </label>
-              <button type="submit" className="btn btn-primary is-full" disabled={busyId === "new-maint"}>Yaratish</button>
+              {maintForm.id && (
+                <label className="input-group is-full">
+                  <span>Admin / usta izohi</span>
+                  <input value={maintForm.adminNote || ""} onChange={(e) => setMaintForm((p) => ({ ...p, adminNote: e.target.value }))} />
+                </label>
+              )}
+              <button type="submit" className="btn btn-primary is-full" disabled={busyId === "new-maint" || busyId === `edit-maint-${maintForm.id}`}>
+                {maintForm.id ? "Saqlash" : "Yaratish"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {messageModal && (
+        <div className="modal-backdrop" onClick={() => setMessageModal(null)}>
+          <div className="modal-card admin-modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setMessageModal(null)} aria-label="Yopish"><X size={20} /></button>
+            <h2 style={{ margin: "0 0 6px", color: "var(--blue-navy)" }}>
+              {messageModal.mode === "edit" ? `Murojaatni tahrirlash (#${messageForm.id})` : "Yangi aloqa murojaatini qayd etish"}
+            </h2>
+            <form
+              className="admin-modal-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const isEdit = messageModal.mode === "edit";
+                const ok = await runAdminRequest({
+                  url: isEdit ? `/api/admin/messages/${messageForm.id}` : "/api/admin/messages",
+                  method: isEdit ? "PATCH" : "POST",
+                  body: messageForm,
+                  busyKey: isEdit ? `edit-msg-${messageForm.id}` : "new-msg",
+                  successMsg: isEdit ? "Murojaat yangilandi!" : "Yangi murojaat qo‘shildi!"
+                });
+                if (ok) setMessageModal(null);
+              }}
+            >
+              <label className="input-group">
+                <span>Ism *</span>
+                <input required value={messageForm.firstName} onChange={(e) => setMessageForm((p) => ({ ...p, firstName: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Familiya *</span>
+                <input required value={messageForm.lastName} onChange={(e) => setMessageForm((p) => ({ ...p, lastName: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Telefon *</span>
+                <input required value={messageForm.phone} onChange={(e) => setMessageForm((p) => ({ ...p, phone: e.target.value }))} />
+              </label>
+              <label className="input-group">
+                <span>Holati</span>
+                <select value={messageForm.status} onChange={(e) => setMessageForm((p) => ({ ...p, status: e.target.value }))}>
+                  <option value="new">Yangi</option>
+                  <option value="read">Ko‘rib chiqildi</option>
+                  <option value="replied">Javob berildi</option>
+                </select>
+              </label>
+              <label className="input-group is-full">
+                <span>Mavzu *</span>
+                <input required value={messageForm.subject} onChange={(e) => setMessageForm((p) => ({ ...p, subject: e.target.value }))} />
+              </label>
+              <label className="input-group is-full">
+                <span>Xabar matni *</span>
+                <textarea rows={3} required value={messageForm.message} onChange={(e) => setMessageForm((p) => ({ ...p, message: e.target.value }))} />
+              </label>
+              <label className="input-group is-full">
+                <span>Admin izohi</span>
+                <input value={messageForm.adminNote} onChange={(e) => setMessageForm((p) => ({ ...p, adminNote: e.target.value }))} />
+              </label>
+              <button type="submit" className="btn btn-primary is-full" disabled={busyId === "new-msg" || busyId === `edit-msg-${messageForm.id}`}>
+                {messageModal.mode === "edit" ? "Saqlash" : "Qo‘shish"}
+              </button>
             </form>
           </div>
         </div>

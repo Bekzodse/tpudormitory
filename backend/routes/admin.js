@@ -1,21 +1,27 @@
+import fs from "node:fs";
 import { Router } from "express";
 import {
   db,
+  dbFilePath,
   ensureGalleryCategory,
   formatPriceUzs,
   formatRoomInventory,
+  formatSupportChat,
+  getAdminActivityLogs,
   getAdminDormRooms,
   getAdminMaintenance,
   getAdminResidents,
   getAdminSupportChats,
   getAnnouncements,
   getAvailableImages,
+  getFacilities,
   getFaqItems,
   getGalleryCategories,
   getGalleryPhotos,
   getHomepageSettings,
   getOrCreateSupportChat,
   getSiteBottomTexts,
+  logAdminActivity,
   parsePriceDigits,
   saveUploadedImage,
   slugifyCategory
@@ -26,6 +32,18 @@ const router = Router();
 const requireAdmin = createRequireAdmin(db);
 
 router.use(requireAdmin);
+
+const validatePositiveIntParam = (_req, res, next, val) => {
+  const num = Number(val);
+  if (!Number.isInteger(num) || num <= 0) {
+    return res.status(400).json({ message: "Noto‘g‘ri ID formati." });
+  }
+  return next();
+};
+
+router.param("id", validatePositiveIntParam);
+router.param("chatId", validatePositiveIntParam);
+router.param("msgId", validatePositiveIntParam);
 
 router.get("/overview", (_request, response) => {
   const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map((row) => {
@@ -105,12 +123,128 @@ router.get("/overview", (_request, response) => {
     availableImages: getAvailableImages(),
     homepage: getHomepageSettings(),
     faqs: getFaqItems(),
-    chats: getAdminSupportChats()
+    facilities: getFacilities(),
+    chats: getAdminSupportChats(),
+    activityLogs: getAdminActivityLogs(300)
+  });
+});
+
+router.get("/activity-logs", (request, response) => {
+  const limit = Number(request.query.limit || 300);
+  return response.json({ activityLogs: getAdminActivityLogs(limit) });
+});
+
+router.post("/activity-logs/contact", (request, response) => {
+  const { section = "clients", clientName = "", clientPhone = "", channel = "Telefon", summary = "" } = request.body;
+  const cleanClient = String(clientName || "").trim();
+  const cleanPhone = String(clientPhone || "").trim();
+  const cleanChannel = String(channel || "Aloqa").trim();
+  const finalSummary = String(summary || "").trim() || `${cleanClient || cleanPhone || "Klient"} bilan ${cleanChannel} orqali bog‘landi`;
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "contact",
+    section: String(section || "clients"),
+    entityLabel: cleanChannel,
+    targetName: cleanClient || cleanPhone,
+    clientName: cleanClient,
+    clientPhone: cleanPhone,
+    summary: finalSummary,
+    details: { channel: cleanChannel }
+  });
+
+  return response.status(201).json({
+    activityLogs: getAdminActivityLogs(300)
   });
 });
 
 router.get("/chats", (_request, response) => {
   return response.json({ chats: getAdminSupportChats() });
+});
+
+router.post("/chats", (request, response) => {
+  const { studentName, phone = "", course = "", roomTitle = "", assignedRoomNumber = "", initialMessage = "" } = request.body;
+  const cleanName = String(studentName || "").trim();
+  const cleanPhone = String(phone || "").trim();
+  if (!cleanName) {
+    return response.status(400).json({ message: "Talaba yoki klient ismini kiriting." });
+  }
+
+  const chatRow = getOrCreateSupportChat({
+    studentName: cleanName,
+    phone: cleanPhone,
+    course: String(course || "").trim(),
+    roomTitle: String(roomTitle || "").trim(),
+    assignedRoomNumber: String(assignedRoomNumber || "").trim()
+  });
+
+  const cleanInitial = String(initialMessage || "").trim();
+  if (cleanInitial) {
+    db.prepare(`
+      INSERT INTO support_chat_messages (chat_id, sender_role, sender_name, message)
+      VALUES (?, 'admin', 'TPU Ma’muriyati', ?)
+    `).run(chatRow.id, cleanInitial);
+    db.prepare(`
+      UPDATE support_chats
+      SET last_message = ?, unread_admin = 0, unread_student = unread_student + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(cleanInitial, chatRow.id);
+  }
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: cleanInitial ? "contact" : "create",
+    section: "chats",
+    entityLabel: "Support Chat",
+    targetName: cleanName,
+    clientName: cleanName,
+    clientPhone: cleanPhone,
+    summary: cleanInitial
+      ? `${cleanName} bilan yangi chat ochdi va xabar yubordi: "${cleanInitial.slice(0, 80)}"`
+      : `${cleanName} bilan yangi support chat yaratdi`
+  });
+
+  return response.status(201).json({
+    chat: formatSupportChat(db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatRow.id), true),
+    chats: getAdminSupportChats(),
+    message: `${cleanName} bilan chat yaratildi!`
+  });
+});
+
+router.patch("/chats/:id", (request, response) => {
+  const chatId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatId);
+  if (!existing) return response.status(404).json({ message: "Chat topilmadi." });
+
+  const { studentName, phone, course, roomTitle, assignedRoomNumber, status } = request.body;
+  const nextName = studentName !== undefined ? String(studentName).trim() || existing.student_name : existing.student_name;
+  const nextPhone = phone !== undefined ? String(phone).trim() : existing.phone;
+  const nextCourse = course !== undefined ? String(course).trim() : (existing.course || "");
+  const nextRoomTitle = roomTitle !== undefined ? String(roomTitle).trim() : (existing.room_title || "");
+  const nextAssigned = assignedRoomNumber !== undefined ? String(assignedRoomNumber).trim() : (existing.assigned_room_number || "");
+  const nextStatus = status !== undefined && ["open", "closed"].includes(status) ? status : existing.status;
+
+  db.prepare(`
+    UPDATE support_chats
+    SET student_name = ?, phone = ?, course = ?, room_title = ?, assigned_room_number = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(nextName, nextPhone, nextCourse, nextRoomTitle, nextAssigned, nextStatus, chatId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "chats",
+    entityLabel: "Support Chat",
+    targetName: nextName,
+    clientName: nextName,
+    clientPhone: nextPhone,
+    summary: `${nextName} chat ma’lumotlarini tahrirladi`
+  });
+
+  return response.json({
+    chats: getAdminSupportChats(),
+    message: "Chat ma’lumotlari yangilandi!"
+  });
 });
 
 router.post("/chats/:id/read", (request, response) => {
@@ -138,17 +272,94 @@ router.post("/chats/:id/reply", (request, response) => {
     WHERE id = ?
   `).run(cleanMsg, chatId);
 
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "contact",
+    section: "chats",
+    entityLabel: "Chat javobi",
+    targetName: existing.student_name,
+    clientName: existing.student_name,
+    clientPhone: existing.phone || "",
+    summary: `${existing.student_name} ga chat orqali javob yubordi: "${cleanMsg.slice(0, 90)}"`
+  });
+
   return response.status(201).json({
     chats: getAdminSupportChats(),
     message: `${existing.student_name} ga javob yuborildi!`
   });
 });
 
+router.patch("/chats/:chatId/messages/:msgId", (request, response) => {
+  const chatId = Number(request.params.chatId);
+  const msgId = Number(request.params.msgId);
+  const chat = db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatId);
+  const msg = db.prepare("SELECT * FROM support_chat_messages WHERE id = ? AND chat_id = ?").get(msgId, chatId);
+  if (!chat || !msg) return response.status(404).json({ message: "Xabar topilmadi." });
+
+  const cleanMsg = String(request.body.message || "").trim();
+  if (!cleanMsg) return response.status(400).json({ message: "Xabar matni bo‘sh bo‘lmasligi kerak." });
+
+  db.prepare("UPDATE support_chat_messages SET message = ? WHERE id = ?").run(cleanMsg, msgId);
+  const latest = db.prepare("SELECT message FROM support_chat_messages WHERE chat_id = ? ORDER BY id DESC LIMIT 1").get(chatId);
+  db.prepare("UPDATE support_chats SET last_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(latest?.message || "", chatId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "chats",
+    entityLabel: "Chat xabari",
+    targetName: chat.student_name,
+    clientName: chat.student_name,
+    clientPhone: chat.phone || "",
+    summary: `${chat.student_name} bilan suhbatdagi xabarni tahrirladi`
+  });
+
+  return response.json({ chats: getAdminSupportChats(), message: "Xabar tahrirlandi!" });
+});
+
+router.delete("/chats/:chatId/messages/:msgId", (request, response) => {
+  const chatId = Number(request.params.chatId);
+  const msgId = Number(request.params.msgId);
+  const chat = db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatId);
+  const msg = db.prepare("SELECT * FROM support_chat_messages WHERE id = ? AND chat_id = ?").get(msgId, chatId);
+  if (!chat || !msg) return response.status(404).json({ message: "Xabar topilmadi." });
+
+  db.prepare("DELETE FROM support_chat_messages WHERE id = ?").run(msgId);
+  const latest = db.prepare("SELECT message FROM support_chat_messages WHERE chat_id = ? ORDER BY id DESC LIMIT 1").get(chatId);
+  db.prepare("UPDATE support_chats SET last_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(latest?.message || "", chatId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "chats",
+    entityLabel: "Chat xabari",
+    targetName: chat.student_name,
+    clientName: chat.student_name,
+    clientPhone: chat.phone || "",
+    summary: `${chat.student_name} bilan suhbatdan xabarni o‘chirdi`
+  });
+
+  return response.json({ chats: getAdminSupportChats(), message: "Xabar o‘chirildi." });
+});
+
 router.delete("/chats/:id", (request, response) => {
   const chatId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM support_chats WHERE id = ?").get(chatId);
+  if (!existing) return response.status(404).json({ message: "Chat topilmadi." });
   db.prepare("DELETE FROM support_chat_messages WHERE chat_id = ?").run(chatId);
-  const res = db.prepare("DELETE FROM support_chats WHERE id = ?").run(chatId);
-  if (!res.changes) return response.status(404).json({ message: "Chat topilmadi." });
+  db.prepare("DELETE FROM support_chats WHERE id = ?").run(chatId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "chats",
+    entityLabel: "Support Chat",
+    targetName: existing.student_name,
+    clientName: existing.student_name,
+    clientPhone: existing.phone || "",
+    summary: `${existing.student_name} bilan suhbatni o‘chirdi`
+  });
+
   return response.json({ chats: getAdminSupportChats() });
 });
 
@@ -218,10 +429,105 @@ router.put("/homepage", (request, response) => {
     nextGallerySub
   );
 
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "homepage",
+    entityLabel: "Bosh sahifa",
+    targetName: nextHighlight || nextPrefix || "Bosh sahifa",
+    summary: "Bosh sahifa matnlari, hero rasmlari va footer ma’lumotlarini yangiladi"
+  });
+
   return response.json({
     homepage: getHomepageSettings(),
     availableImages: getAvailableImages(),
     message: "Bosh sahifa matnlari va rasmlari yangilandi!"
+  });
+});
+
+router.post("/facilities", (request, response) => {
+  const { title, sub = "", category = "amenity", badge = "Barcha talabalarga", iconName = "Wifi" } = request.body;
+  const cleanTitle = String(title || "").trim();
+  if (!cleanTitle) return response.status(400).json({ message: "Qulaylik nomini kiriting." });
+  const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS max_ord FROM facilities").get()?.max_ord || 0;
+  db.prepare(`
+    INSERT INTO facilities (icon_name, category, title, sub, badge, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    String(iconName || "Wifi").trim(),
+    String(category || "amenity").trim(),
+    cleanTitle,
+    String(sub || "").trim(),
+    String(badge || "Mavjud").trim(),
+    maxOrder + 1
+  );
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "facilities",
+    entityLabel: "Qulaylik",
+    targetName: cleanTitle,
+    summary: `Yangi qulaylik yaratdi: "${cleanTitle}"`
+  });
+
+  return response.status(201).json({
+    facilities: getFacilities(),
+    message: `"${cleanTitle}" qulayligi saytga qo‘shildi!`
+  });
+});
+
+router.patch("/facilities/:id", (request, response) => {
+  const facId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM facilities WHERE id = ?").get(facId);
+  if (!existing) return response.status(404).json({ message: "Qulaylik topilmadi." });
+
+  const nextTitle = request.body.title !== undefined ? String(request.body.title).trim() : existing.title;
+  const nextSub = request.body.sub !== undefined ? String(request.body.sub).trim() : existing.sub;
+  const nextCat = request.body.category !== undefined ? String(request.body.category).trim() || existing.category : existing.category;
+  const nextBadge = request.body.badge !== undefined ? String(request.body.badge).trim() : existing.badge;
+  const nextIcon = request.body.iconName !== undefined ? String(request.body.iconName).trim() || existing.icon_name : existing.icon_name;
+  if (!nextTitle) return response.status(400).json({ message: "Qulaylik nomi bo‘sh bo‘lmasligi kerak." });
+
+  db.prepare(`
+    UPDATE facilities
+    SET icon_name = ?, category = ?, title = ?, sub = ?, badge = ?
+    WHERE id = ?
+  `).run(nextIcon, nextCat, nextTitle, nextSub, nextBadge, facId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "facilities",
+    entityLabel: "Qulaylik",
+    targetName: nextTitle,
+    summary: `Qulaylikni tahrirladi: "${nextTitle}"`
+  });
+
+  return response.json({
+    facilities: getFacilities(),
+    message: "Qulaylik yangilandi!"
+  });
+});
+
+router.delete("/facilities/:id", (request, response) => {
+  const facId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM facilities WHERE id = ?").get(facId);
+  if (!existing) return response.status(404).json({ message: "Qulaylik topilmadi." });
+  db.prepare("DELETE FROM facilities WHERE id = ?").run(facId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "facilities",
+    entityLabel: "Qulaylik",
+    targetName: existing.title,
+    summary: `Qulaylikni o‘chirdi: "${existing.title}"`
+  });
+
+  return response.json({
+    facilities: getFacilities(),
+    message: `"${existing.title}" qulayligi o‘chirildi.`
   });
 });
 
@@ -234,6 +540,14 @@ router.post("/faqs", (request, response) => {
   }
   const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS max_ord FROM faq_items").get()?.max_ord || 0;
   db.prepare("INSERT INTO faq_items (question, answer, sort_order) VALUES (?, ?, ?)").run(cleanQ, cleanA, maxOrder + 1);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "faqs",
+    entityLabel: "FAQ",
+    targetName: cleanQ.slice(0, 70),
+    summary: `Yangi FAQ savoli yaratdi: "${cleanQ.slice(0, 70)}"`
+  });
   return response.status(201).json({
     faqs: getFaqItems(),
     message: "Yangi savol-javob qo‘shildi!"
@@ -251,6 +565,14 @@ router.patch("/faqs/:id", (request, response) => {
     return response.status(400).json({ message: "Savol va javob bo‘sh bo‘lmasligi kerak." });
   }
   db.prepare("UPDATE faq_items SET question = ?, answer = ? WHERE id = ?").run(cleanQ, cleanA, faqId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "faqs",
+    entityLabel: "FAQ",
+    targetName: cleanQ.slice(0, 70),
+    summary: `FAQ savolini tahrirladi: "${cleanQ.slice(0, 70)}"`
+  });
   return response.json({
     faqs: getFaqItems(),
     message: "Savol-javob yangilandi!"
@@ -258,8 +580,18 @@ router.patch("/faqs/:id", (request, response) => {
 });
 
 router.delete("/faqs/:id", (request, response) => {
-  const res = db.prepare("DELETE FROM faq_items WHERE id = ?").run(Number(request.params.id));
-  if (!res.changes) return response.status(404).json({ message: "Savol-javob topilmadi." });
+  const faqId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM faq_items WHERE id = ?").get(faqId);
+  if (!existing) return response.status(404).json({ message: "Savol-javob topilmadi." });
+  db.prepare("DELETE FROM faq_items WHERE id = ?").run(faqId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "faqs",
+    entityLabel: "FAQ",
+    targetName: existing.question.slice(0, 70),
+    summary: `FAQ savolini o‘chirdi: "${existing.question.slice(0, 70)}"`
+  });
   return response.json({
     faqs: getFaqItems(),
     message: "Savol-javob o‘chirildi."
@@ -278,6 +610,15 @@ router.post("/upload-image", (request, response) => {
       VALUES (?, ?, ?, ?)
     `).run(String(title).trim() || "Yotoqxona surati", String(category).trim() || "rooms", imageUrl, String(tag).trim() || "Yotoqxona");
   }
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "gallery",
+    entityLabel: "Rasm yuklash",
+    targetName: String(title || imageUrl),
+    summary: `Serverga yangi rasm yukladi: ${imageUrl}`
+  });
 
   return response.status(201).json({
     imageUrl,
@@ -304,6 +645,15 @@ router.post("/gallery-categories", (request, response) => {
     VALUES (?, ?, ?, ?)
   `).run(cleanSlug, cleanName, String(description || "").trim(), maxOrder + 1);
 
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "gallery",
+    entityLabel: "Galereya bo‘limi",
+    targetName: cleanName,
+    summary: `Yangi galereya bo‘limi yaratdi: "${cleanName}"`
+  });
+
   return response.status(201).json({
     galleryCategories: getGalleryCategories(),
     gallery: getGalleryPhotos(),
@@ -322,6 +672,14 @@ router.patch("/gallery-categories/:id", (request, response) => {
     return response.status(400).json({ message: "Bo‘lim nomi bo‘sh bo‘lmasligi kerak." });
   }
   db.prepare("UPDATE gallery_categories SET name = ?, description = ? WHERE id = ?").run(cleanName, cleanDesc, catId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "gallery",
+    entityLabel: "Galereya bo‘limi",
+    targetName: cleanName,
+    summary: `Galereya bo‘limini tahrirladi: "${cleanName}"`
+  });
   return response.json({
     galleryCategories: getGalleryCategories(),
     gallery: getGalleryPhotos(),
@@ -336,6 +694,14 @@ router.delete("/gallery-categories/:id", (request, response) => {
 
   db.prepare("UPDATE gallery_photos SET category = 'campus' WHERE category = ?").run(existing.slug);
   db.prepare("DELETE FROM gallery_categories WHERE id = ?").run(catId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "gallery",
+    entityLabel: "Galereya bo‘limi",
+    targetName: existing.name,
+    summary: `Galereya bo‘limini o‘chirdi: "${existing.name}"`
+  });
 
   return response.json({
     galleryCategories: getGalleryCategories(),
@@ -380,6 +746,15 @@ router.post("/gallery", (request, response) => {
     VALUES (?, ?, ?, ?, ?)
   `).run(cleanTitle, targetCategorySlug, savedImg, cleanTag, cleanDesc);
 
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "gallery",
+    entityLabel: "Galereya rasmi",
+    targetName: cleanTitle,
+    summary: `Fotogalereyaga yangi rasm qo‘shdi: "${cleanTitle}" (${targetCategorySlug})`
+  });
+
   return response.status(201).json({
     gallery: getGalleryPhotos(),
     galleryCategories: getGalleryCategories(),
@@ -422,6 +797,15 @@ router.patch("/gallery/:id", (request, response) => {
     WHERE id = ?
   `).run(nextTitle, nextCategory, nextImg, nextTag, nextDesc, photoId);
 
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "gallery",
+    entityLabel: "Galereya rasmi",
+    targetName: nextTitle,
+    summary: `Galereya rasmini tahrirladi: "${nextTitle}"`
+  });
+
   return response.json({
     gallery: getGalleryPhotos(),
     galleryCategories: getGalleryCategories(),
@@ -431,8 +815,18 @@ router.patch("/gallery/:id", (request, response) => {
 });
 
 router.delete("/gallery/:id", (request, response) => {
-  const res = db.prepare("DELETE FROM gallery_photos WHERE id = ?").run(Number(request.params.id));
-  if (!res.changes) return response.status(404).json({ message: "Rasm topilmadi." });
+  const photoId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM gallery_photos WHERE id = ?").get(photoId);
+  if (!existing) return response.status(404).json({ message: "Rasm topilmadi." });
+  db.prepare("DELETE FROM gallery_photos WHERE id = ?").run(photoId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "gallery",
+    entityLabel: "Galereya rasmi",
+    targetName: existing.title,
+    summary: `Galereyadan rasmni o‘chirdi: "${existing.title}"`
+  });
   return response.json({
     gallery: getGalleryPhotos(),
     galleryCategories: getGalleryCategories()
@@ -452,6 +846,15 @@ router.post("/bottom-texts", (request, response) => {
     INSERT INTO site_bottom_texts (section, title, content, badge, sort_order)
     VALUES (?, ?, ?, ?, ?)
   `).run(cleanSection, cleanTitle, cleanContent, String(badge || "").trim(), maxOrder + 1);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "bottomTexts",
+    entityLabel: "Pastki gap",
+    targetName: cleanTitle,
+    summary: `Yangi pastki matn yaratdi (${cleanSection}): "${cleanTitle}"`
+  });
 
   return response.status(201).json({
     bottomTexts: getSiteBottomTexts(),
@@ -476,6 +879,14 @@ router.patch("/bottom-texts/:id", (request, response) => {
     cleanBadge,
     itemId
   );
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "bottomTexts",
+    entityLabel: "Pastki gap",
+    targetName: cleanTitle,
+    summary: `Pastki matnni tahrirladi: "${cleanTitle}"`
+  });
   return response.json({
     bottomTexts: getSiteBottomTexts(),
     message: "Pastki gap yangilandi!"
@@ -483,22 +894,123 @@ router.patch("/bottom-texts/:id", (request, response) => {
 });
 
 router.delete("/bottom-texts/:id", (request, response) => {
-  const res = db.prepare("DELETE FROM site_bottom_texts WHERE id = ?").run(Number(request.params.id));
-  if (!res.changes) return response.status(404).json({ message: "Ma’lumot topilmadi." });
+  const itemId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM site_bottom_texts WHERE id = ?").get(itemId);
+  if (!existing) return response.status(404).json({ message: "Ma’lumot topilmadi." });
+  db.prepare("DELETE FROM site_bottom_texts WHERE id = ?").run(itemId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "bottomTexts",
+    entityLabel: "Pastki gap",
+    targetName: existing.title,
+    summary: `Pastki matnni o‘chirdi: "${existing.title}"`
+  });
   return response.json({
     bottomTexts: getSiteBottomTexts(),
     message: "Pastki gap o‘chirildi."
   });
 });
 
+router.post("/bookings", (request, response) => {
+  const {
+    roomId,
+    studentName,
+    phone,
+    telegram = "",
+    course = "1-kurs",
+    age = null,
+    moveInDate = "",
+    duration = "1 semestr",
+    notes = "",
+    preferredRoomNumber = "",
+    status = "pending",
+    adminNote = ""
+  } = request.body;
+
+  const cleanName = String(studentName || "").trim();
+  const cleanPhone = String(phone || "").trim();
+  if (!cleanName || !cleanPhone) {
+    return response.status(400).json({ message: "Talaba F.I.Sh. va telefon raqamini kiriting." });
+  }
+  const inv =
+    (roomId ? db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(Number(roomId)) : null) ||
+    db.prepare("SELECT * FROM room_inventory ORDER BY id ASC LIMIT 1").get();
+  if (!inv) return response.status(400).json({ message: "Xona turi topilmadi." });
+
+  const safeStatus = ["pending", "approved", "rejected"].includes(status) ? status : "pending";
+  const parsedAge = age !== null && age !== "" ? Number(age) : null;
+
+  const res = db.prepare(`
+    INSERT INTO bookings (
+      room_id, room_title, room_category, student_name, phone, telegram, course, age,
+      move_in_date, duration, notes, preferred_room_number, status, admin_note
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    inv.id,
+    inv.title,
+    inv.category,
+    cleanName,
+    cleanPhone,
+    String(telegram || "").trim() || null,
+    String(course || "").trim() || null,
+    Number.isInteger(parsedAge) ? parsedAge : null,
+    String(moveInDate || "").trim() || null,
+    String(duration || "1 semestr").trim(),
+    String(notes || "").trim() || null,
+    String(preferredRoomNumber || "").trim() || null,
+    safeStatus,
+    String(adminNote || "").trim() || null
+  );
+
+  const created = db.prepare("SELECT * FROM bookings WHERE id = ?").get(res.lastInsertRowid);
+  getOrCreateSupportChat({
+    bookingId: created.id,
+    studentName: cleanName,
+    phone: cleanPhone,
+    course: String(course || "").trim(),
+    roomTitle: inv.title,
+    assignedRoomNumber: String(preferredRoomNumber || "").trim()
+  });
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "bookings",
+    entityLabel: "Bron arizasi",
+    targetName: `#${created.id} • ${cleanName}`,
+    clientName: cleanName,
+    clientPhone: cleanPhone,
+    summary: `${cleanName} uchun yangi bron arizasi yaratdi (${inv.title})`
+  });
+
+  return response.status(201).json({
+    booking: created,
+    message: `${cleanName} uchun yangi ariza qo‘shildi!`
+  });
+});
+
 router.patch("/bookings/:id", (request, response) => {
   const bookingId = Number(request.params.id);
-  const { status, adminNote, dormRoomId } = request.body;
-  if (!["pending", "approved", "rejected"].includes(status)) {
-    return response.status(400).json({ message: "Noto‘g‘ri ariza holati." });
-  }
+  const {
+    status,
+    adminNote,
+    dormRoomId,
+    studentName,
+    phone,
+    telegram,
+    course,
+    age,
+    roomId,
+    preferredRoomNumber,
+    moveInDate,
+    duration,
+    notes
+  } = request.body;
 
   try {
+    let previousStatus = null;
     const updatedBooking = db.transaction(() => {
       const existing = db.prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId);
       if (!existing) {
@@ -506,30 +1018,62 @@ router.patch("/bookings/:id", (request, response) => {
         err.status = 404;
         throw err;
       }
+      previousStatus = existing.status;
 
-      const inv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(existing.room_id);
+      const nextStatus = status !== undefined ? status : existing.status;
+      if (!["pending", "approved", "rejected"].includes(nextStatus)) {
+        const err = new Error("Noto‘g‘ri ariza holati.");
+        err.status = 400;
+        throw err;
+      }
+
+      let nextRoomId = existing.room_id;
+      let nextRoomTitle = existing.room_title;
+      let nextRoomCategory = existing.room_category;
+      if (roomId !== undefined && Number(roomId) !== existing.room_id) {
+        const nextInv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(Number(roomId));
+        if (nextInv) {
+          nextRoomId = nextInv.id;
+          nextRoomTitle = nextInv.title;
+          nextRoomCategory = nextInv.category;
+        }
+      }
+
+      const nextName = studentName !== undefined ? String(studentName).trim() || existing.student_name : existing.student_name;
+      const nextPhone = phone !== undefined ? String(phone).trim() || existing.phone : existing.phone;
+      const nextTelegram = telegram !== undefined ? String(telegram).trim() || null : existing.telegram;
+      const nextCourse = course !== undefined ? String(course).trim() || null : existing.course;
+      const rawNextAge = age !== undefined ? (age === "" || age === null ? null : Number(age)) : existing.age;
+      const nextAge = rawNextAge !== null && Number.isInteger(rawNextAge) ? rawNextAge : null;
+      const nextPrefRoom = preferredRoomNumber !== undefined ? String(preferredRoomNumber).trim() || null : existing.preferred_room_number;
+      const nextMoveIn = moveInDate !== undefined ? String(moveInDate).trim() || null : existing.move_in_date;
+      const nextDuration = duration !== undefined ? String(duration).trim() || existing.duration : existing.duration;
+      const nextNotes = notes !== undefined ? String(notes).trim() || null : existing.notes;
+      const nextAdminNote = adminNote !== undefined ? String(adminNote) : existing.admin_note;
+
+      const inv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(nextRoomId);
       if (inv) {
         const totalSpots = inv.total_rooms * inv.spots_per_room;
-        if (existing.status !== "approved" && status === "approved") {
+        if (existing.status !== "approved" && nextStatus === "approved") {
           if (inv.occupied_spots >= totalSpots) {
             const err = new Error("Ushbu xona turida bo‘sh joy qolmagan.");
             err.status = 409;
             throw err;
           }
           db.prepare("UPDATE room_inventory SET occupied_spots = occupied_spots + 1 WHERE id = ?").run(inv.id);
-        } else if (existing.status === "approved" && status !== "approved") {
+        } else if (existing.status === "approved" && nextStatus !== "approved") {
           db.prepare("UPDATE room_inventory SET occupied_spots = MAX(0, occupied_spots - 1) WHERE id = ?").run(inv.id);
         }
       }
 
-      if (status === "approved") {
+      if (nextStatus === "approved") {
         const existingResident = db.prepare("SELECT id FROM room_residents WHERE booking_id = ?").get(bookingId);
         if (!existingResident) {
           let targetRoom = null;
           if (dormRoomId) {
             targetRoom = db.prepare("SELECT * FROM dorm_rooms WHERE id = ?").get(Number(dormRoomId));
-          } else if (existing.preferred_room_number) {
-            const pref = db.prepare("SELECT * FROM dorm_rooms WHERE room_number = ? AND status = 'active'").get(existing.preferred_room_number);
+          } else if (nextPrefRoom) {
+            const pref = db.prepare("SELECT * FROM dorm_rooms WHERE room_number = ? AND status = 'active'").get(nextPrefRoom);
             if (pref) {
               const occ = db.prepare("SELECT COUNT(*) AS cnt FROM room_residents WHERE dorm_room_id = ?").get(pref.id)?.cnt || 0;
               if (occ < pref.capacity) targetRoom = pref;
@@ -544,7 +1088,7 @@ router.patch("/bookings/:id", (request, response) => {
               GROUP BY d.id
               HAVING occ < d.capacity
               ORDER BY d.room_number ASC
-            `).all(existing.room_category);
+            `).all(nextRoomCategory);
             targetRoom = candidates[0] || null;
           }
           if (targetRoom) {
@@ -560,12 +1104,12 @@ router.patch("/bookings/:id", (request, response) => {
             `).run(
               targetRoom.id,
               bookingId,
-              existing.student_name,
-              existing.phone,
-              existing.telegram || "",
-              existing.course || "",
+              nextName,
+              nextPhone,
+              nextTelegram || "",
+              nextCourse || "",
               "",
-              existing.move_in_date || ""
+              nextMoveIn || ""
             );
           }
         }
@@ -575,9 +1119,27 @@ router.patch("/bookings/:id", (request, response) => {
 
       db.prepare(`
         UPDATE bookings
-        SET status = ?, admin_note = COALESCE(?, admin_note), updated_at = CURRENT_TIMESTAMP
+        SET room_id = ?, room_title = ?, room_category = ?, student_name = ?, phone = ?, telegram = ?,
+            course = ?, age = ?, preferred_room_number = ?, move_in_date = ?, duration = ?, notes = ?,
+            status = ?, admin_note = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(status, adminNote !== undefined ? String(adminNote) : null, bookingId);
+      `).run(
+        nextRoomId,
+        nextRoomTitle,
+        nextRoomCategory,
+        nextName,
+        nextPhone,
+        nextTelegram,
+        nextCourse,
+        nextAge,
+        nextPrefRoom,
+        nextMoveIn,
+        nextDuration,
+        nextNotes,
+        nextStatus,
+        nextAdminNote,
+        bookingId
+      );
 
       return db.prepare(`
         SELECT b.*, a.login AS student_login, a.avatar AS student_avatar,
@@ -600,7 +1162,7 @@ router.patch("/bookings/:id", (request, response) => {
       roomTitle: updatedBooking.room_title,
       assignedRoomNumber: updatedBooking.assigned_room_number || ""
     });
-    if (status === "approved") {
+    if (updatedBooking.status === "approved" && previousStatus !== "approved") {
       const autoReply = `Tabriklaymiz, ${updatedBooking.student_name}! Sizning "${updatedBooking.room_title}" bo‘yicha arizangiz tasdiqlandi${updatedBooking.assigned_room_number ? ` va ${updatedBooking.assigned_room_number}-xonaga biriktirildi` : ""}.${adminNote ? ` Ma’muriyat izohi: ${adminNote}` : ""} Savollaringiz bo‘lsa shu chatda yozishingiz mumkin.`;
       db.prepare(`
         INSERT INTO support_chat_messages (chat_id, sender_role, sender_name, message)
@@ -612,6 +1174,20 @@ router.patch("/bookings/:id", (request, response) => {
         WHERE id = ?
       `).run(autoReply, updatedBooking.assigned_room_number || "", chatRow.id);
     }
+
+    const statusChanged = previousStatus !== updatedBooking.status;
+    logAdminActivity({
+      admin: request.adminAccount,
+      actionType: statusChanged && (updatedBooking.status === "approved" || updatedBooking.status === "rejected") ? "contact" : "update",
+      section: "bookings",
+      entityLabel: "Bron arizasi",
+      targetName: `#${updatedBooking.id} • ${updatedBooking.student_name}`,
+      clientName: updatedBooking.student_name,
+      clientPhone: updatedBooking.phone || "",
+      summary: statusChanged
+        ? `${updatedBooking.student_name} arizasi holatini "${updatedBooking.status}" ga o‘zgartirdi${updatedBooking.assigned_room_number ? ` (${updatedBooking.assigned_room_number}-xona)` : ""}`
+        : `${updatedBooking.student_name} (#${updatedBooking.id}) arizasini tahrirladi`
+    });
 
     const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
     return response.json({
@@ -628,9 +1204,11 @@ router.patch("/bookings/:id", (request, response) => {
 
 router.delete("/bookings/:id", (request, response) => {
   const bookingId = Number(request.params.id);
+  let removedBooking = null;
   const removed = db.transaction(() => {
     const existing = db.prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId);
     if (!existing) return false;
+    removedBooking = existing;
     if (existing.status === "approved") {
       db.prepare("UPDATE room_inventory SET occupied_spots = MAX(0, occupied_spots - 1) WHERE id = ?").run(existing.room_id);
     }
@@ -640,6 +1218,16 @@ router.delete("/bookings/:id", (request, response) => {
   })();
 
   if (!removed) return response.status(404).json({ message: "Ariza topilmadi." });
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "bookings",
+    entityLabel: "Bron arizasi",
+    targetName: `#${bookingId} • ${removedBooking.student_name}`,
+    clientName: removedBooking.student_name,
+    clientPhone: removedBooking.phone || "",
+    summary: `${removedBooking.student_name} (#${bookingId}) bron arizasini o‘chirdi`
+  });
   const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
   return response.json({ rooms, dormRooms: getAdminDormRooms(), residents: getAdminResidents() });
 });
@@ -743,6 +1331,15 @@ router.post("/rooms", (request, response) => {
     INSERT INTO gallery_photos (title, category, image, tag)
     VALUES (?, 'rooms', ?, ?)
   `).run(cleanTitle, savedImage, `${cleanSpots} o‘rin`);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "rooms",
+    entityLabel: "Xona turi",
+    targetName: cleanTitle,
+    summary: `Yangi xona turi yaratdi: "${cleanTitle}" (${formattedPrice})`
+  });
 
   const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
   return response.status(201).json({
@@ -867,6 +1464,15 @@ router.put("/rooms/:id", (request, response) => {
     roomId
   );
 
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "rooms",
+    entityLabel: "Xona turi",
+    targetName: nextTitle,
+    summary: `Xona turini tahrirladi: "${nextTitle}" (${nextPrice})`
+  });
+
   const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
   return response.json({
     room: formatRoomInventory(db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(roomId)),
@@ -881,6 +1487,11 @@ router.delete("/rooms/:id", (request, response) => {
   const inv = db.prepare("SELECT * FROM room_inventory WHERE id = ?").get(roomId);
   if (!inv) return response.status(404).json({ message: "Xona turi topilmadi." });
 
+  const totalTypes = db.prepare("SELECT COUNT(*) AS cnt FROM room_inventory").get()?.cnt || 0;
+  if (totalTypes <= 1) {
+    return response.status(400).json({ message: "Kamida bitta xona turi qolishi kerak." });
+  }
+
   const linkedRooms = db.prepare("SELECT id FROM dorm_rooms WHERE room_type_id = ?").all(roomId);
   for (const lr of linkedRooms) {
     const occ = db.prepare("SELECT COUNT(*) AS cnt FROM room_residents WHERE dorm_room_id = ?").get(lr.id)?.cnt || 0;
@@ -890,6 +1501,14 @@ router.delete("/rooms/:id", (request, response) => {
   }
   db.prepare("DELETE FROM dorm_rooms WHERE room_type_id = ?").run(roomId);
   db.prepare("DELETE FROM room_inventory WHERE id = ?").run(roomId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "rooms",
+    entityLabel: "Xona turi",
+    targetName: inv.title,
+    summary: `Xona turini o‘chirdi: "${inv.title}"`
+  });
   const rooms = db.prepare("SELECT * FROM room_inventory ORDER BY id ASC").all().map(formatRoomInventory);
   return response.json({ rooms, dormRooms: getAdminDormRooms() });
 });
@@ -930,6 +1549,15 @@ router.post("/dorm-rooms", (request, response) => {
     savedImage,
     cleanDesc
   );
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "dormRooms",
+    entityLabel: "Xona raqami",
+    targetName: `${cleanNumber}-xona`,
+    summary: `Yangi xona yaratdi: ${cleanNumber}-xona (${cleanFloor}-qavat, ${inv.spots_per_room} o‘rin)`
+  });
 
   return response.status(201).json({
     dormRooms: getAdminDormRooms(),
@@ -1006,6 +1634,15 @@ router.patch("/dorm-rooms/:id", (request, response) => {
     dormRoomId
   );
 
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "dormRooms",
+    entityLabel: "Xona raqami",
+    targetName: `${nextNumber}-xona`,
+    summary: `${nextNumber}-xona ma’lumotlarini tahrirladi (${nextStatus === "maintenance" ? "Ta’mirlashda" : "Faol"})`
+  });
+
   return response.json({
     dormRooms: getAdminDormRooms(),
     availableImages: getAvailableImages()
@@ -1014,12 +1651,21 @@ router.patch("/dorm-rooms/:id", (request, response) => {
 
 router.delete("/dorm-rooms/:id", (request, response) => {
   const dormRoomId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM dorm_rooms WHERE id = ?").get(dormRoomId);
+  if (!existing) return response.status(404).json({ message: "Xona topilmadi." });
   const occCount = db.prepare("SELECT COUNT(*) AS cnt FROM room_residents WHERE dorm_room_id = ?").get(dormRoomId)?.cnt || 0;
   if (occCount > 0) {
     return response.status(409).json({ message: "Avval ushbu xonadagi talabalarni boshqa xonaga ko‘chiring." });
   }
-  const res = db.prepare("DELETE FROM dorm_rooms WHERE id = ?").run(dormRoomId);
-  if (!res.changes) return response.status(404).json({ message: "Xona topilmadi." });
+  db.prepare("DELETE FROM dorm_rooms WHERE id = ?").run(dormRoomId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "dormRooms",
+    entityLabel: "Xona raqami",
+    targetName: `${existing.room_number}-xona`,
+    summary: `${existing.room_number}-xonani o‘chirdi`
+  });
   return response.json({ dormRooms: getAdminDormRooms() });
 });
 
@@ -1039,6 +1685,17 @@ router.post("/residents", (request, response) => {
     INSERT INTO room_residents (dorm_room_id, booking_id, student_name, phone, telegram, course, faculty, payment_status, move_in_date)
     VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)
   `).run(room.id, cleanName, cleanPhone, String(telegram).trim(), String(course).trim(), String(faculty).trim(), safePay, String(moveInDate).trim());
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "residents",
+    entityLabel: "Yashovchi talaba",
+    targetName: `${cleanName} (${room.room_number}-xona)`,
+    clientName: cleanName,
+    clientPhone: cleanPhone,
+    summary: `Yangi talabani ${room.room_number}-xonaga joylashtirdi: ${cleanName}`
+  });
 
   return response.status(201).json({ dormRooms: getAdminDormRooms(), residents: getAdminResidents() });
 });
@@ -1083,17 +1740,48 @@ router.patch("/residents/:id", (request, response) => {
     residentId
   );
 
+  const onlyPaymentChanged =
+    paymentStatus !== undefined &&
+    dormRoomId === undefined &&
+    studentName === undefined &&
+    phone === undefined;
+  const roomRow = db.prepare("SELECT room_number FROM dorm_rooms WHERE id = ?").get(nextRoomId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: onlyPaymentChanged ? "payments" : "residents",
+    entityLabel: onlyPaymentChanged ? "To‘lov holati" : "Yashovchi talaba",
+    targetName: `${nextName}${roomRow ? ` (${roomRow.room_number}-xona)` : ""}`,
+    clientName: nextName,
+    clientPhone: nextPhone,
+    summary: onlyPaymentChanged
+      ? `${nextName} to‘lov holatini "${nextPayment}" ga o‘zgartirdi`
+      : `${nextName} talaba ma’lumotlarini tahrirladi${roomRow ? ` (${roomRow.room_number}-xona)` : ""}`
+  });
+
   return response.json({ dormRooms: getAdminDormRooms(), residents: getAdminResidents() });
 });
 
 router.delete("/residents/:id", (request, response) => {
-  const res = db.prepare("DELETE FROM room_residents WHERE id = ?").run(Number(request.params.id));
-  if (!res.changes) return response.status(404).json({ message: "Yashovchi talaba topilmadi." });
+  const residentId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM room_residents WHERE id = ?").get(residentId);
+  if (!existing) return response.status(404).json({ message: "Yashovchi talaba topilmadi." });
+  db.prepare("DELETE FROM room_residents WHERE id = ?").run(residentId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "residents",
+    entityLabel: "Yashovchi talaba",
+    targetName: existing.student_name,
+    clientName: existing.student_name,
+    clientPhone: existing.phone || "",
+    summary: `${existing.student_name} ni yashovchilar ro‘yxatidan o‘chirdi`
+  });
   return response.json({ dormRooms: getAdminDormRooms(), residents: getAdminResidents() });
 });
 
 router.post("/maintenance", (request, response) => {
-  const { roomNumber, category, description, priority = "medium" } = request.body;
+  const { roomNumber, category, description, priority = "medium", reporterName = "" } = request.body;
   const cleanRoom = String(roomNumber || "").trim();
   const cleanCat = String(category || "").trim();
   const cleanDesc = String(description || "").trim();
@@ -1102,9 +1790,19 @@ router.post("/maintenance", (request, response) => {
   }
   const safePriority = ["low", "medium", "high"].includes(priority) ? priority : "medium";
   db.prepare(`
-    INSERT INTO maintenance_requests (room_number, category, description, priority, status)
-    VALUES (?, ?, ?, ?, 'open')
-  `).run(cleanRoom, cleanCat, cleanDesc, safePriority);
+    INSERT INTO maintenance_requests (room_number, category, description, priority, status, reporter_name)
+    VALUES (?, ?, ?, ?, 'open', ?)
+  `).run(cleanRoom, cleanCat, cleanDesc, safePriority, String(reporterName || "").trim());
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "maintenance",
+    entityLabel: "Texnik xizmat",
+    targetName: `${cleanRoom}-xona • ${cleanCat}`,
+    summary: `${cleanRoom}-xona uchun texnik ariza yaratdi: ${cleanCat} — ${cleanDesc.slice(0, 70)}`
+  });
+
   return response.status(201).json({ maintenance: getAdminMaintenance() });
 });
 
@@ -1113,7 +1811,8 @@ router.patch("/maintenance/:id", (request, response) => {
   const existing = db.prepare("SELECT * FROM maintenance_requests WHERE id = ?").get(maintId);
   if (!existing) return response.status(404).json({ message: "So‘rov topilmadi." });
 
-  const { status, priority, category, description, adminNote } = request.body;
+  const { roomNumber, status, priority, category, description, adminNote, reporterName } = request.body;
+  const nextRoom = roomNumber !== undefined ? String(roomNumber).trim() || existing.room_number : existing.room_number;
   const nextStatus = status !== undefined ? status : existing.status;
   if (!["open", "in_progress", "resolved"].includes(nextStatus)) {
     return response.status(400).json({ message: "Noto‘g‘ri texnik holat." });
@@ -1122,19 +1821,40 @@ router.patch("/maintenance/:id", (request, response) => {
   const nextCat = category !== undefined ? String(category).trim() || existing.category : existing.category;
   const nextDesc = description !== undefined ? String(description).trim() || existing.description : existing.description;
   const nextNote = adminNote !== undefined ? String(adminNote).trim() : (existing.admin_note || "");
+  const nextReporter = reporterName !== undefined ? String(reporterName).trim() : (existing.reporter_name || "");
 
   db.prepare(`
     UPDATE maintenance_requests
-    SET status = ?, priority = ?, category = ?, description = ?, admin_note = ?, updated_at = CURRENT_TIMESTAMP
+    SET room_number = ?, status = ?, priority = ?, category = ?, description = ?, admin_note = ?, reporter_name = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(nextStatus, nextPriority, nextCat, nextDesc, nextNote, maintId);
+  `).run(nextRoom, nextStatus, nextPriority, nextCat, nextDesc, nextNote, nextReporter, maintId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "maintenance",
+    entityLabel: "Texnik xizmat",
+    targetName: `${nextRoom}-xona • ${nextCat}`,
+    clientName: nextReporter,
+    summary: `${nextRoom}-xona texnik so‘rovini tahrirladi (holat: ${nextStatus})`
+  });
 
   return response.json({ maintenance: getAdminMaintenance() });
 });
 
 router.delete("/maintenance/:id", (request, response) => {
-  const res = db.prepare("DELETE FROM maintenance_requests WHERE id = ?").run(Number(request.params.id));
-  if (!res.changes) return response.status(404).json({ message: "So‘rov topilmadi." });
+  const maintId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM maintenance_requests WHERE id = ?").get(maintId);
+  if (!existing) return response.status(404).json({ message: "So‘rov topilmadi." });
+  db.prepare("DELETE FROM maintenance_requests WHERE id = ?").run(maintId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "maintenance",
+    entityLabel: "Texnik xizmat",
+    targetName: `${existing.room_number}-xona • ${existing.category}`,
+    summary: `${existing.room_number}-xona texnik so‘rovini o‘chirdi (${existing.category})`
+  });
   return response.json({ maintenance: getAdminMaintenance() });
 });
 
@@ -1149,6 +1869,16 @@ router.post("/announcements", (request, response) => {
     INSERT INTO dorm_announcements (title, category, content, audience, pinned)
     VALUES (?, ?, ?, ?, ?)
   `).run(cleanTitle, String(category).trim() || "Umumiy", cleanContent, String(audience).trim() || "Barcha talabalar", pinned ? 1 : 0);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "announcements",
+    entityLabel: "E’lon",
+    targetName: cleanTitle,
+    summary: `Yangi e’lon yaratdi: "${cleanTitle}" (${audience})`
+  });
+
   return response.status(201).json({ announcements: getAnnouncements() });
 });
 
@@ -1173,13 +1903,64 @@ router.patch("/announcements/:id", (request, response) => {
     SET title = ?, category = ?, content = ?, audience = ?, pinned = ?
     WHERE id = ?
   `).run(nextTitle, nextCat || "Umumiy", nextContent, nextAud || "Barcha talabalar", nextPinned, annId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "announcements",
+    entityLabel: "E’lon",
+    targetName: nextTitle,
+    summary: `E’lonni tahrirladi: "${nextTitle}"`
+  });
+
   return response.json({ announcements: getAnnouncements() });
 });
 
 router.delete("/announcements/:id", (request, response) => {
-  const res = db.prepare("DELETE FROM dorm_announcements WHERE id = ?").run(Number(request.params.id));
-  if (!res.changes) return response.status(404).json({ message: "E’lon topilmadi." });
+  const annId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM dorm_announcements WHERE id = ?").get(annId);
+  if (!existing) return response.status(404).json({ message: "E’lon topilmadi." });
+  db.prepare("DELETE FROM dorm_announcements WHERE id = ?").run(annId);
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "announcements",
+    entityLabel: "E’lon",
+    targetName: existing.title,
+    summary: `E’lonni o‘chirdi: "${existing.title}"`
+  });
   return response.json({ announcements: getAnnouncements() });
+});
+
+router.post("/messages", (request, response) => {
+  const { firstName, lastName, phone, subject = "Umumiy savol", message, status = "new", adminNote = "" } = request.body;
+  const cleanFirst = String(firstName || "").trim();
+  const cleanLast = String(lastName || "").trim();
+  const cleanPhone = String(phone || "").trim();
+  const cleanMsg = String(message || "").trim();
+  if (!cleanFirst || !cleanLast || !cleanPhone || !cleanMsg) {
+    return response.status(400).json({ message: "Ism, familiya, telefon va xabar matnini kiriting." });
+  }
+  const safeStatus = ["new", "read", "replied"].includes(status) ? status : "new";
+  db.prepare(`
+    INSERT INTO contact_messages (first_name, last_name, phone, subject, message, status, admin_note)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(cleanFirst, cleanLast, cleanPhone, String(subject || "Umumiy savol").trim(), cleanMsg, safeStatus, String(adminNote || "").trim());
+
+  const fullName = `${cleanFirst} ${cleanLast}`;
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "messages",
+    entityLabel: "Aloqa murojaati",
+    targetName: fullName,
+    clientName: fullName,
+    clientPhone: cleanPhone,
+    summary: `${fullName} bo‘yicha yangi aloqa murojaatini qayd etdi (${subject})`
+  });
+
+  const messages = db.prepare("SELECT * FROM contact_messages ORDER BY id DESC").all();
+  return response.status(201).json({ messages, message: "Yangi murojaat qo‘shildi!" });
 });
 
 router.patch("/messages/:id", (request, response) => {
@@ -1187,18 +1968,56 @@ router.patch("/messages/:id", (request, response) => {
   const existing = db.prepare("SELECT * FROM contact_messages WHERE id = ?").get(msgId);
   if (!existing) return response.status(404).json({ message: "Xabar topilmadi." });
 
-  const { status, adminNote } = request.body;
+  const { firstName, lastName, phone, subject, message, status, adminNote } = request.body;
+  const nextFirst = firstName !== undefined ? String(firstName).trim() || existing.first_name : existing.first_name;
+  const nextLast = lastName !== undefined ? String(lastName).trim() || existing.last_name : existing.last_name;
+  const nextPhone = phone !== undefined ? String(phone).trim() || existing.phone : existing.phone;
+  const nextSubject = subject !== undefined ? String(subject).trim() || existing.subject : existing.subject;
+  const nextMessage = message !== undefined ? String(message).trim() || existing.message : existing.message;
   const nextStatus = status && ["new", "read", "replied"].includes(status) ? status : (existing.status || "new");
   const nextNote = adminNote !== undefined ? String(adminNote).trim() : (existing.admin_note || "");
 
-  db.prepare("UPDATE contact_messages SET status = ?, admin_note = ? WHERE id = ?").run(nextStatus, nextNote, msgId);
+  db.prepare(`
+    UPDATE contact_messages
+    SET first_name = ?, last_name = ?, phone = ?, subject = ?, message = ?, status = ?, admin_note = ?
+    WHERE id = ?
+  `).run(nextFirst, nextLast, nextPhone, nextSubject, nextMessage, nextStatus, nextNote, msgId);
+
+  const fullName = `${nextFirst} ${nextLast}`;
+  const isReplyContact = nextStatus === "replied" && existing.status !== "replied";
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: isReplyContact ? "contact" : "update",
+    section: "messages",
+    entityLabel: "Aloqa murojaati",
+    targetName: fullName,
+    clientName: fullName,
+    clientPhone: nextPhone,
+    summary: isReplyContact
+      ? `${fullName} murojaatiga javob berdi ("${nextSubject}")`
+      : `${fullName} murojaatini tahrirladi (holat: ${nextStatus})`
+  });
+
   const messages = db.prepare("SELECT * FROM contact_messages ORDER BY id DESC").all();
   return response.json({ messages });
 });
 
 router.delete("/messages/:id", (request, response) => {
-  const res = db.prepare("DELETE FROM contact_messages WHERE id = ?").run(Number(request.params.id));
-  if (!res.changes) return response.status(404).json({ message: "Xabar topilmadi." });
+  const msgId = Number(request.params.id);
+  const existing = db.prepare("SELECT * FROM contact_messages WHERE id = ?").get(msgId);
+  if (!existing) return response.status(404).json({ message: "Xabar topilmadi." });
+  db.prepare("DELETE FROM contact_messages WHERE id = ?").run(msgId);
+  const fullName = `${existing.first_name} ${existing.last_name}`;
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "messages",
+    entityLabel: "Aloqa murojaati",
+    targetName: fullName,
+    clientName: fullName,
+    clientPhone: existing.phone || "",
+    summary: `${fullName} aloqa xabarini o‘chirdi`
+  });
   const messages = db.prepare("SELECT * FROM contact_messages ORDER BY id DESC").all();
   return response.json({ messages });
 });
@@ -1208,11 +2027,20 @@ router.post("/payments/bulk", (request, response) => {
   if (!["paid", "pending", "overdue"].includes(toStatus)) {
     return response.status(400).json({ message: "Noto‘g‘ri to‘lov holati." });
   }
+  let res;
   if (fromStatus && ["paid", "pending", "overdue"].includes(fromStatus)) {
-    db.prepare("UPDATE room_residents SET payment_status = ? WHERE payment_status = ?").run(toStatus, fromStatus);
+    res = db.prepare("UPDATE room_residents SET payment_status = ? WHERE payment_status = ?").run(toStatus, fromStatus);
   } else {
-    db.prepare("UPDATE room_residents SET payment_status = ?").run(toStatus);
+    res = db.prepare("UPDATE room_residents SET payment_status = ?").run(toStatus);
   }
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "payments",
+    entityLabel: "Ommaviy to‘lov",
+    targetName: `${res.changes} nafar talaba`,
+    summary: `${res.changes} nafar talabaning to‘lov holatini "${toStatus}" ga yangiladi`
+  });
   return response.json({ residents: getAdminResidents(), dormRooms: getAdminDormRooms() });
 });
 
@@ -1223,7 +2051,8 @@ router.post("/accounts", async (request, response) => {
   const cleanLogin = String(login || "").trim();
   const cleanPhone = String(phone || "").trim();
   const cleanCourse = String(course || "1-kurs").trim();
-  const parsedAge = age ? Number(age) : 20;
+  const rawAge = age !== undefined && age !== null && age !== "" ? Number(age) : 20;
+  const parsedAge = Number.isInteger(rawAge) && rawAge >= 15 && rawAge <= 60 ? rawAge : 20;
   const pwd = String(password || "");
 
   if (!cleanFirst || !cleanLast || !cleanLogin || pwd.length < 6) {
@@ -1240,6 +2069,18 @@ router.post("/accounts", async (request, response) => {
     VALUES (?, ?, ?, ?, ?, 'student', ?, ?, ?, 'universityId', 1)
   `).run(cleanFirst, cleanLast, parsedAge, cleanCourse, cleanPhone, cleanLogin, hash, cipher);
 
+  const fullName = `${cleanFirst} ${cleanLast}`;
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "students",
+    entityLabel: "Talaba akkaunti",
+    targetName: `${fullName} (@${cleanLogin})`,
+    clientName: fullName,
+    clientPhone: cleanPhone,
+    summary: `Yangi talaba portal akkauntini yaratdi: ${fullName} (login: ${cleanLogin})`
+  });
+
   return response.status(201).json({ message: `${cleanFirst} ${cleanLast} akkaunti ochildi!` });
 });
 
@@ -1251,7 +2092,19 @@ router.delete("/accounts/:id", (request, response) => {
     return response.status(400).json({ message: "Administrator akkauntini o‘chirib bo‘lmaydi." });
   }
   db.prepare("UPDATE bookings SET student_account_id = NULL WHERE student_account_id = ?").run(accountId);
+  db.prepare("UPDATE support_chats SET student_account_id = NULL WHERE student_account_id = ?").run(accountId);
   db.prepare("DELETE FROM accounts WHERE id = ?").run(accountId);
+  const fullName = `${existing.first_name} ${existing.last_name}`;
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "students",
+    entityLabel: "Talaba akkaunti",
+    targetName: `${fullName} (@${existing.login})`,
+    clientName: fullName,
+    clientPhone: existing.phone || "",
+    summary: `Talaba portal akkauntini o‘chirdi: ${fullName} (${existing.login})`
+  });
   return response.json({ message: "Akkaunt o‘chirildi." });
 });
 
@@ -1261,7 +2114,7 @@ router.patch("/accounts/:id/password", async (request, response) => {
   if (nextPassword.length < 6) {
     return response.status(400).json({ message: "Parol kamida 6 ta belgidan iborat bo‘lishi kerak." });
   }
-  const existing = db.prepare("SELECT id, login FROM accounts WHERE id = ?").get(accountId);
+  const existing = db.prepare("SELECT id, first_name, last_name, phone, login FROM accounts WHERE id = ?").get(accountId);
   if (!existing) return response.status(404).json({ message: "Akkaunt topilmadi." });
 
   db.prepare("UPDATE accounts SET password_hash = ?, password_ciphertext = ? WHERE id = ?").run(
@@ -1269,6 +2122,17 @@ router.patch("/accounts/:id/password", async (request, response) => {
     encryptSecret(nextPassword),
     accountId
   );
+  const fullName = `${existing.first_name} ${existing.last_name}`.trim();
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "students",
+    entityLabel: "Parol yangilash",
+    targetName: `${fullName} (@${existing.login})`,
+    clientName: fullName,
+    clientPhone: existing.phone || "",
+    summary: `${fullName} (${existing.login}) parolini yangiladi`
+  });
   return response.json({ message: `${existing.login} paroli yangilandi.` });
 });
 
@@ -1311,10 +2175,21 @@ router.patch("/accounts/:id", async (request, response) => {
   `).run(cleanFirst, cleanLast, parsedAge, cleanCourse, cleanPhone, cleanLogin, nextHash, nextCipher, accountId);
 
   const updatedAcc = db.prepare("SELECT * FROM accounts WHERE id = ?").get(accountId);
+  const fullName = `${cleanFirst} ${cleanLast}`;
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "students",
+    entityLabel: existing.role === "admin" ? "Admin akkaunti" : "Talaba akkaunti",
+    targetName: `${fullName} (@${cleanLogin})`,
+    clientName: fullName,
+    clientPhone: cleanPhone,
+    summary: `${fullName} (${cleanLogin}) profil ma’lumotlarini tahrirladi`
+  });
   return response.json({ account: publicStudent(updatedAcc), message: `${cleanFirst} ${cleanLast} profili yangilandi.` });
 });
 
-router.get("/database", (_request, response) => {
+function getSafeDatabaseSnapshot() {
   const tableMeta = db.prepare(`
     SELECT name, sql FROM sqlite_master
     WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
@@ -1322,11 +2197,25 @@ router.get("/database", (_request, response) => {
   `).all();
 
   const relationNotes = {
+    accounts: "university_id → authorized_students.university_id • sessions.account_id",
+    admin_activity_logs: "admin_id → accounts.id (Ishboshqaruvchi nazorat jurnali)",
+    authorized_students: "university_id ← accounts.university_id",
     bookings: "room_id → room_inventory.id • student_account_id → accounts.id",
+    contact_messages: "Aloqa formasidan kelgan xabarlar",
+    dorm_announcements: "Talabalar uchun e’lonlar",
     dorm_rooms: "room_type_id → room_inventory.id",
-    room_residents: "dorm_room_id → dorm_rooms.id • booking_id → bookings.id",
+    facilities: "Saytdagi qulayliklar (FacilitiesPage)",
+    faq_items: "Savol-javoblar (FaqPage)",
+    gallery_categories: "slug ← gallery_photos.category",
+    gallery_photos: "category → gallery_categories.slug",
+    homepage_settings: "Bosh sahifa va footer sozlamalari (id = 1)",
     maintenance_requests: "room_number → dorm_rooms.room_number",
-    accounts: "university_id → authorized_students.university_id • bookings.student_account_id"
+    room_inventory: "id ← dorm_rooms.room_type_id • bookings.room_id",
+    room_residents: "dorm_room_id → dorm_rooms.id • booking_id → bookings.id",
+    sessions: "account_id → accounts.id (Doimiy sessiyalar)",
+    site_bottom_texts: "Bosh sahifa va galereya pastki matnlari",
+    support_chat_messages: "chat_id → support_chats.id",
+    support_chats: "booking_id → bookings.id • student_account_id → accounts.id"
   };
 
   const tables = tableMeta.map(({ name, sql }) => {
@@ -1341,6 +2230,7 @@ router.get("/database", (_request, response) => {
         if (key === "password_ciphertext") clean[key] = val ? decryptSecret(val) : null;
         else if (key === "password_hash") clean[key] = val ? `${String(val).slice(0, 22)}... (scrypt)` : null;
         else if (key === "passport_ciphertext" || key === "passport_hash") clean[key] = val ? "[Shifrlangan / Hash]" : null;
+        else if (key === "token" && name === "sessions") clean[key] = val ? `${String(val).slice(0, 10)}... (faol)` : null;
         else if (key === "avatar" && typeof val === "string" && val.startsWith("data:")) clean[key] = `[Rasm (${Math.round(val.length / 1024)} KB)]`;
         else clean[key] = val;
       }
@@ -1352,12 +2242,230 @@ router.get("/database", (_request, response) => {
       sql,
       relation: relationNotes[name] || "Mustaqil jadval",
       rowCount: countRow?.cnt || 0,
-      columns: columns.map((c) => ({ name: c.name, type: c.type, pk: Boolean(c.pk), notnull: Boolean(c.notnull) })),
+      hasId,
+      readonly: name === "sessions",
+      columns: columns.map((c) => ({
+        name: c.name,
+        type: c.type,
+        pk: Boolean(c.pk),
+        notnull: Boolean(c.notnull),
+        dflt_value: c.dflt_value
+      })),
       rows
     };
   });
 
-  return response.json({ dbPath: "backend/data/auth.sqlite", tables });
+  const integrityRes = db.pragma("integrity_check");
+  const integrityStatus = integrityRes?.[0]?.integrity_check || "ok";
+  let dbSizeKb = 0;
+  try {
+    dbSizeKb = Math.round((fs.statSync(dbFilePath).size || 0) / 1024);
+  } catch {
+    dbSizeKb = 0;
+  }
+
+  return {
+    dbPath: "backend/data/auth.sqlite",
+    integrityStatus,
+    dbSizeKb,
+    totalRows: tables.reduce((s, t) => s + t.rowCount, 0),
+    tables
+  };
+}
+
+function getValidatedTable(tableName) {
+  const clean = String(tableName || "").trim();
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(clean)) return null;
+  const exists = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? AND name NOT LIKE 'sqlite_%'").get(clean);
+  if (!exists) return null;
+  const columns = db.prepare(`PRAGMA table_info("${clean}")`).all();
+  return { name: clean, columns };
+}
+
+router.get("/database", (_request, response) => {
+  return response.json(getSafeDatabaseSnapshot());
+});
+
+router.post("/database/sync", (request, response) => {
+  const expiredDel = db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(Date.now()).changes;
+
+  // Sync room_inventory.occupied_spots with real room_residents count if residents exceed or differ
+  const types = db.prepare("SELECT * FROM room_inventory").all();
+  for (const inv of types) {
+    const actualOcc = db.prepare(`
+      SELECT COUNT(rr.id) AS cnt
+      FROM room_residents rr
+      JOIN dorm_rooms dr ON dr.id = rr.dorm_room_id
+      WHERE dr.room_type_id = ?
+    `).get(inv.id)?.cnt || 0;
+    const maxSpots = inv.total_rooms * inv.spots_per_room;
+    const safeOcc = Math.max(0, Math.min(maxSpots, Math.max(actualOcc, inv.occupied_spots)));
+    if (safeOcc !== inv.occupied_spots) {
+      db.prepare("UPDATE room_inventory SET occupied_spots = ? WHERE id = ?").run(safeOcc, inv.id);
+    }
+  }
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "database",
+    entityLabel: "Baza tekshiruvi",
+    targetName: "auth.sqlite",
+    summary: `Ma’lumotlar bazasini tekshirdi va sinxronladi (${expiredDel} ta eski sessiya tozalandi)`
+  });
+
+  return response.json({
+    ...getSafeDatabaseSnapshot(),
+    message: `Baza tekshirildi (Holat: OK). ${expiredDel} ta muddati o‘tgan sessiya tozalandi.`
+  });
+});
+
+router.post("/database/:table/rows", async (request, response) => {
+  const meta = getValidatedTable(request.params.table);
+  if (!meta) return response.status(404).json({ message: "Jadval topilmadi." });
+  if (["sessions", "homepage_settings"].includes(meta.name)) {
+    return response.status(400).json({ message: `"${meta.name}" jadvaliga qo‘lda qator qo‘shib bo‘lmaydi.` });
+  }
+
+  const protectedCols = new Set(["id", "created_at", "updated_at", "password_hash", "passport_hash", "passport_ciphertext"]);
+  const allowedCols = meta.columns.filter((c) => !protectedCols.has(c.name));
+  const payload = request.body || {};
+
+  const insertCols = [];
+  const insertVals = [];
+
+  for (const col of allowedCols) {
+    if (payload[col.name] !== undefined && payload[col.name] !== "") {
+      if (meta.name === "accounts" && col.name === "password_ciphertext") {
+        const plain = String(payload[col.name]);
+        if (plain.length < 6) {
+          return response.status(400).json({ message: "Parol kamida 6 ta belgidan iborat bo‘lishi kerak." });
+        }
+        insertCols.push("password_hash", "password_ciphertext");
+        insertVals.push(await hashPassword(plain), encryptSecret(plain));
+      } else {
+        insertCols.push(col.name);
+        insertVals.push(payload[col.name]);
+      }
+    }
+  }
+
+  if (insertCols.length === 0) {
+    return response.status(400).json({ message: "Kamida bitta maydon qiymatini kiriting." });
+  }
+
+  const colSql = insertCols.map((c) => `"${c}"`).join(", ");
+  const placeholders = insertCols.map(() => "?").join(", ");
+  const res = db.prepare(`INSERT INTO "${meta.name}" (${colSql}) VALUES (${placeholders})`).run(...insertVals);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "create",
+    section: "database",
+    entityLabel: `Jadval: ${meta.name}`,
+    targetName: `#${res.lastInsertRowid}`,
+    summary: `Ma’lumotlar bazasidagi "${meta.name}" jadvaliga yangi qator (#${res.lastInsertRowid}) qo‘shdi`
+  });
+
+  return response.status(201).json({
+    id: res.lastInsertRowid,
+    ...getSafeDatabaseSnapshot(),
+    message: `"${meta.name}" jadvaliga yangi qator qo‘shildi!`
+  });
+});
+
+router.patch("/database/:table/rows/:id", async (request, response) => {
+  const meta = getValidatedTable(request.params.table);
+  if (!meta) return response.status(404).json({ message: "Jadval topilmadi." });
+  if (meta.name === "sessions") {
+    return response.status(400).json({ message: "Sessiyalar jadvalini qo‘lda tahrirlab bo‘lmaydi." });
+  }
+  const hasId = meta.columns.some((c) => c.name === "id");
+  if (!hasId) return response.status(400).json({ message: "Ushbu jadvalda ID ustuni yo‘q." });
+
+  const rowId = Number(request.params.id);
+  const existing = db.prepare(`SELECT * FROM "${meta.name}" WHERE id = ?`).get(rowId);
+  if (!existing) return response.status(404).json({ message: "Qator topilmadi." });
+
+  const protectedCols = new Set(["id", "created_at", "password_hash", "passport_hash", "passport_ciphertext"]);
+  const allowedCols = meta.columns.filter((c) => !protectedCols.has(c.name));
+  const payload = request.body || {};
+
+  const setParts = [];
+  const vals = [];
+
+  for (const col of allowedCols) {
+    if (payload[col.name] !== undefined) {
+      if (meta.name === "accounts" && col.name === "password_ciphertext") {
+        const plain = String(payload[col.name] || "");
+        if (plain.length > 0) {
+          if (plain.length < 6) {
+            return response.status(400).json({ message: "Parol kamida 6 ta belgi bo‘lishi kerak." });
+          }
+          setParts.push('"password_hash" = ?', '"password_ciphertext" = ?');
+          vals.push(await hashPassword(plain), encryptSecret(plain));
+        }
+      } else {
+        setParts.push(`"${col.name}" = ?`);
+        vals.push(payload[col.name] === "" && !col.notnull ? null : payload[col.name]);
+      }
+    }
+  }
+
+  if (setParts.length === 0) {
+    return response.status(400).json({ message: "Yangilanadigan maydon tanlanmadi." });
+  }
+
+  vals.push(rowId);
+  db.prepare(`UPDATE "${meta.name}" SET ${setParts.join(", ")} WHERE id = ?`).run(...vals);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "update",
+    section: "database",
+    entityLabel: `Jadval: ${meta.name}`,
+    targetName: `#${rowId}`,
+    summary: `Ma’lumotlar bazasidagi "${meta.name}" jadvali #${rowId} qatorini tahrirladi`
+  });
+
+  return response.json({
+    ...getSafeDatabaseSnapshot(),
+    message: `"${meta.name}" (#${rowId}) qatori yangilandi!`
+  });
+});
+
+router.delete("/database/:table/rows/:id", (request, response) => {
+  const meta = getValidatedTable(request.params.table);
+  if (!meta) return response.status(404).json({ message: "Jadval topilmadi." });
+  if (["sessions", "homepage_settings"].includes(meta.name)) {
+    return response.status(400).json({ message: `"${meta.name}" jadvalidan qator o‘chirib bo‘lmaydi.` });
+  }
+  const hasId = meta.columns.some((c) => c.name === "id");
+  if (!hasId) return response.status(400).json({ message: "Ushbu jadvalda ID ustuni yo‘q." });
+
+  const rowId = Number(request.params.id);
+  const existing = db.prepare(`SELECT * FROM "${meta.name}" WHERE id = ?`).get(rowId);
+  if (!existing) return response.status(404).json({ message: "Qator topilmadi." });
+
+  if (meta.name === "accounts" && existing.role === "admin") {
+    return response.status(400).json({ message: "Administrator akkauntini bazadan o‘chirib bo‘lmaydi." });
+  }
+
+  db.prepare(`DELETE FROM "${meta.name}" WHERE id = ?`).run(rowId);
+
+  logAdminActivity({
+    admin: request.adminAccount,
+    actionType: "delete",
+    section: "database",
+    entityLabel: `Jadval: ${meta.name}`,
+    targetName: `#${rowId}`,
+    summary: `Ma’lumotlar bazasidagi "${meta.name}" jadvalidan #${rowId} qatorini o‘chirdi`
+  });
+
+  return response.json({
+    ...getSafeDatabaseSnapshot(),
+    message: `"${meta.name}" (#${rowId}) qatori o‘chirildi.`
+  });
 });
 
 export default router;

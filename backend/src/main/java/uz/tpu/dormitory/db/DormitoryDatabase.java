@@ -25,7 +25,9 @@ public class DormitoryDatabase {
     public final List<GalleryPhoto> gallery = new CopyOnWriteArrayList<>();
     public final List<SiteBottomText> bottomTexts = new CopyOnWriteArrayList<>();
     public final List<FaqItem> faqs = new CopyOnWriteArrayList<>();
+    public final List<Facility> facilities = new CopyOnWriteArrayList<>();
     public final List<SupportChat> chats = new CopyOnWriteArrayList<>();
+    public final List<AdminActivityLog> activityLogs = new CopyOnWriteArrayList<>();
     public HomepageSettings homepage = new HomepageSettings();
 
     public final AtomicLong accountSeq = new AtomicLong(10);
@@ -40,8 +42,10 @@ public class DormitoryDatabase {
     public final AtomicLong galSeq = new AtomicLong(30);
     public final AtomicLong bottomTextSeq = new AtomicLong(20);
     public final AtomicLong faqSeq = new AtomicLong(20);
+    public final AtomicLong facilitySeq = new AtomicLong(20);
     public final AtomicLong chatSeq = new AtomicLong(10);
     public final AtomicLong chatMsgSeq = new AtomicLong(50);
+    public final AtomicLong activitySeq = new AtomicLong(1);
 
     public DormitoryDatabase(File projectRoot) {
         this.projectRoot = projectRoot;
@@ -299,6 +303,23 @@ public class DormitoryDatabase {
         c1.messages.add(new ChatMessage(2L, 1L, "admin", "TPU Ma’muriyati", "Va alaykum assalom! 1-qavat 102-xona ma’muriyatga pasportingiz bilan keling.", nowIso()));
         c1.messages.add(new ChatMessage(3L, 1L, "student", "Jasur Karimov", "Rahmat! Shartnomani qaysi xonadan olsam bo‘ladi?", nowIso()));
         chats.add(c1);
+
+        // 11. Facilities
+        String[][] facData = {
+                {"Wifi", "study", "Yuqori tezlikdagi Wi-Fi", "Yotoqxona bo‘ylab 500 Mbit/s tezlikdagi uzluksiz optik tolali internet.", "500 Mbit/s"},
+                {"ShieldCheck", "security", "24/7 Smart Xavfsizlik", "Smart Face-ID kirish nazorati, 120+ videokuzatuv kameralari va professional qo‘riqlash.", "Face ID"},
+                {"Utensils", "dining", "Zamonaviy oshxonalar", "Har bir qavatda induksion plitalar, mikroto‘lqinli pechlar va keng muzlatgichlar.", "Har qavatda"},
+                {"WashingMachine", "amenity", "Kir yuvish majmuasi", "Avtomatik kir yuvish va quritish mashinalari hamda dazmollash zonalari bepul.", "Bepul"},
+                {"Dumbbell", "sports", "Sport & Fitness zali", "Kardio va kuch mashg‘ulotlari trenajyorlari hamda ochiq street-workout maydonchasi.", "24/7 ochiq"},
+                {"BookOpen", "study", "Kutubxona & Kovorking", "Tinch mutolaa zali, guruh loyihalari uchun kovorking maydoni va kitoblar fondi.", "Sokin zona"},
+                {"Armchair", "amenity", "Talabalar dam olish zali", "Katta ekran, qulay yumshoq divanlar, stol o‘yinlari va dam olish muhiti.", "Chill lounge"},
+                {"CarFront", "amenity", "Xavfsiz avtoturargoh", "Velosiped, skuter va avtomobillar uchun 24/7 videokuzatuv ostidagi qulay turargoh.", "Kuzatuv ostida"}
+        };
+        int facOrd = 1;
+        for (String[] fd : facData) {
+            facilities.add(new Facility(facOrd, fd[0], fd[1], fd[2], fd[3], fd[4], facOrd, nowIso()));
+            facOrd++;
+        }
     }
 
     private void addMaint(long id, String room, String cat, String desc, String prio, String st) {
@@ -469,5 +490,294 @@ public class DormitoryDatabase {
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    public void logActivity(Account admin, String actionType, String section, String entityLabel,
+                            String targetName, String clientName, String clientPhone, String summary) {
+        String aLogin = admin != null ? admin.login : "AdminTPU";
+        String aName = admin != null ? (admin.firstName + " " + admin.lastName).trim() : "TPU Administrator";
+        Long aId = admin != null ? admin.id : null;
+        activityLogs.add(0, new AdminActivityLog(
+                activitySeq.getAndIncrement(),
+                aId, aLogin, aName, actionType, section, entityLabel,
+                targetName, clientName, clientPhone, summary, nowIso()
+        ));
+    }
+
+    public String facilitiesToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < facilities.size(); i++) {
+            if (i > 0) sb.append(",");
+            Facility f = facilities.get(i);
+            sb.append("{")
+                    .append("\"id\":").append(f.id).append(",")
+                    .append("\"iconName\":").append(JsonHelper.quote(f.iconName)).append(",")
+                    .append("\"category\":").append(JsonHelper.quote(f.category)).append(",")
+                    .append("\"title\":").append(JsonHelper.quote(f.title)).append(",")
+                    .append("\"sub\":").append(JsonHelper.quote(f.sub)).append(",")
+                    .append("\"badge\":").append(JsonHelper.quote(f.badge)).append(",")
+                    .append("\"sortOrder\":").append(f.sortOrder).append(",")
+                    .append("\"createdAt\":").append(JsonHelper.quote(f.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String faqsToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < faqs.size(); i++) {
+            if (i > 0) sb.append(",");
+            FaqItem f = faqs.get(i);
+            sb.append("{\"id\":").append(f.id)
+                    .append(",\"q\":").append(JsonHelper.quote(f.q))
+                    .append(",\"a\":").append(JsonHelper.quote(f.a))
+                    .append(",\"sortOrder\":").append(f.sortOrder)
+                    .append(",\"createdAt\":").append(JsonHelper.quote(f.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String activityLogsToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        int limit = Math.min(300, activityLogs.size());
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) sb.append(",");
+            AdminActivityLog l = activityLogs.get(i);
+            sb.append("{")
+                    .append("\"id\":").append(l.id).append(",")
+                    .append("\"adminId\":").append(l.adminId != null ? l.adminId : "null").append(",")
+                    .append("\"adminLogin\":").append(JsonHelper.quote(l.adminLogin)).append(",")
+                    .append("\"adminName\":").append(JsonHelper.quote(l.adminName)).append(",")
+                    .append("\"actionType\":").append(JsonHelper.quote(l.actionType)).append(",")
+                    .append("\"section\":").append(JsonHelper.quote(l.section)).append(",")
+                    .append("\"entityLabel\":").append(JsonHelper.quote(l.entityLabel)).append(",")
+                    .append("\"targetName\":").append(JsonHelper.quote(l.targetName)).append(",")
+                    .append("\"clientName\":").append(JsonHelper.quote(l.clientName)).append(",")
+                    .append("\"clientPhone\":").append(JsonHelper.quote(l.clientPhone)).append(",")
+                    .append("\"summary\":").append(JsonHelper.quote(l.summary)).append(",")
+                    .append("\"createdAt\":").append(JsonHelper.quote(l.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String dormRoomsToJson(boolean includeResidents) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < dormRooms.size(); i++) {
+            if (i > 0) sb.append(",");
+            DormRoom dr = dormRooms.get(i);
+            RoomInventory rt = rooms.stream().filter(r -> r.id == dr.roomTypeId).findFirst().orElse(null);
+            List<Resident> occs = residents.stream().filter(r -> r.dormRoomId == dr.id).toList();
+            String monthly = (dr.customPrice != null && !dr.customPrice.isBlank())
+                    ? dr.customPrice : (rt != null ? rt.price : "900 000 so‘m");
+            sb.append("{")
+                    .append("\"id\":").append(dr.id).append(",")
+                    .append("\"roomNumber\":").append(JsonHelper.quote(dr.roomNumber)).append(",")
+                    .append("\"roomTypeId\":").append(dr.roomTypeId).append(",")
+                    .append("\"roomCategory\":").append(JsonHelper.quote(dr.roomCategory)).append(",")
+                    .append("\"typeTitle\":").append(JsonHelper.quote(rt != null ? rt.title : dr.capacity + " kishilik")).append(",")
+                    .append("\"monthlyPrice\":").append(JsonHelper.quote(monthly)).append(",")
+                    .append("\"customPrice\":").append(JsonHelper.quote(dr.customPrice != null ? dr.customPrice : "")).append(",")
+                    .append("\"image\":").append(JsonHelper.quote(dr.image != null ? dr.image : "/images/room3.jpeg")).append(",")
+                    .append("\"description\":").append(JsonHelper.quote(dr.description != null ? dr.description : "")).append(",")
+                    .append("\"floor\":").append(dr.floor).append(",")
+                    .append("\"capacity\":").append(dr.capacity).append(",")
+                    .append("\"occupied\":").append(occs.size()).append(",")
+                    .append("\"available\":").append(Math.max(0, dr.capacity - occs.size())).append(",")
+                    .append("\"status\":").append(JsonHelper.quote(dr.status));
+            if (includeResidents) {
+                sb.append(",\"residents\":[");
+                for (int j = 0; j < occs.size(); j++) {
+                    if (j > 0) sb.append(",");
+                    sb.append(residentToJson(occs.get(j)));
+                }
+                sb.append("]");
+            }
+            sb.append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String residentToJson(Resident r) {
+        DormRoom dr = dormRooms.stream().filter(d -> d.id == r.dormRoomId).findFirst().orElse(null);
+        String monthly = dr != null && dr.customPrice != null ? dr.customPrice : "900 000 so‘m";
+        return "{"
+                + "\"id\":" + r.id + ","
+                + "\"dormRoomId\":" + r.dormRoomId + ","
+                + "\"roomNumber\":" + JsonHelper.quote(dr != null ? dr.roomNumber : "") + ","
+                + "\"floor\":" + (dr != null ? dr.floor : 1) + ","
+                + "\"capacity\":" + (dr != null ? dr.capacity : 2) + ","
+                + "\"monthlyPrice\":" + JsonHelper.quote(monthly) + ","
+                + "\"bookingId\":" + (r.bookingId != null ? r.bookingId : "null") + ","
+                + "\"studentName\":" + JsonHelper.quote(r.studentName) + ","
+                + "\"phone\":" + JsonHelper.quote(r.phone) + ","
+                + "\"telegram\":" + JsonHelper.quote(r.telegram != null ? r.telegram : "") + ","
+                + "\"course\":" + JsonHelper.quote(r.course != null ? r.course : "") + ","
+                + "\"faculty\":" + JsonHelper.quote(r.faculty != null ? r.faculty : "") + ","
+                + "\"paymentStatus\":" + JsonHelper.quote(r.paymentStatus) + ","
+                + "\"moveInDate\":" + JsonHelper.quote(r.moveInDate != null ? r.moveInDate : "") + ","
+                + "\"createdAt\":" + JsonHelper.quote(r.createdAt)
+                + "}";
+    }
+
+    public String residentsToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < residents.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(residentToJson(residents.get(i)));
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String bookingsToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < bookings.size(); i++) {
+            if (i > 0) sb.append(",");
+            Booking b = bookings.get(i);
+            sb.append("{")
+                    .append("\"id\":").append(b.id).append(",")
+                    .append("\"room_id\":").append(b.roomId).append(",")
+                    .append("\"room_title\":").append(JsonHelper.quote(b.roomTitle)).append(",")
+                    .append("\"room_category\":").append(JsonHelper.quote(b.roomCategory)).append(",")
+                    .append("\"student_name\":").append(JsonHelper.quote(b.studentName)).append(",")
+                    .append("\"phone\":").append(JsonHelper.quote(b.phone)).append(",")
+                    .append("\"telegram\":").append(JsonHelper.quote(b.telegram)).append(",")
+                    .append("\"course\":").append(JsonHelper.quote(b.course)).append(",")
+                    .append("\"age\":").append(b.age != null ? b.age : "null").append(",")
+                    .append("\"move_in_date\":").append(JsonHelper.quote(b.moveInDate)).append(",")
+                    .append("\"duration\":").append(JsonHelper.quote(b.duration)).append(",")
+                    .append("\"notes\":").append(JsonHelper.quote(b.notes)).append(",")
+                    .append("\"preferred_room_number\":").append(JsonHelper.quote(b.preferredRoomNumber)).append(",")
+                    .append("\"status\":").append(JsonHelper.quote(b.status)).append(",")
+                    .append("\"admin_note\":").append(JsonHelper.quote(b.adminNote)).append(",")
+                    .append("\"created_at\":").append(JsonHelper.quote(b.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String maintenanceToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < maintenance.size(); i++) {
+            if (i > 0) sb.append(",");
+            MaintenanceRequest m = maintenance.get(i);
+            sb.append("{")
+                    .append("\"id\":").append(m.id).append(",")
+                    .append("\"roomNumber\":").append(JsonHelper.quote(m.roomNumber)).append(",")
+                    .append("\"category\":").append(JsonHelper.quote(m.category)).append(",")
+                    .append("\"description\":").append(JsonHelper.quote(m.description)).append(",")
+                    .append("\"priority\":").append(JsonHelper.quote(m.priority)).append(",")
+                    .append("\"status\":").append(JsonHelper.quote(m.status)).append(",")
+                    .append("\"reporterName\":").append(JsonHelper.quote(m.reporterName != null ? m.reporterName : "")).append(",")
+                    .append("\"adminNote\":").append(JsonHelper.quote(m.adminNote != null ? m.adminNote : "")).append(",")
+                    .append("\"createdAt\":").append(JsonHelper.quote(m.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String announcementsToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < announcements.size(); i++) {
+            if (i > 0) sb.append(",");
+            Announcement a = announcements.get(i);
+            sb.append("{")
+                    .append("\"id\":").append(a.id).append(",")
+                    .append("\"title\":").append(JsonHelper.quote(a.title)).append(",")
+                    .append("\"category\":").append(JsonHelper.quote(a.category)).append(",")
+                    .append("\"content\":").append(JsonHelper.quote(a.content)).append(",")
+                    .append("\"audience\":").append(JsonHelper.quote(a.audience)).append(",")
+                    .append("\"pinned\":").append(a.pinned).append(",")
+                    .append("\"createdAt\":").append(JsonHelper.quote(a.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String messagesToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < messages.size(); i++) {
+            if (i > 0) sb.append(",");
+            ContactMessage m = messages.get(i);
+            sb.append("{")
+                    .append("\"id\":").append(m.id).append(",")
+                    .append("\"first_name\":").append(JsonHelper.quote(m.firstName)).append(",")
+                    .append("\"last_name\":").append(JsonHelper.quote(m.lastName)).append(",")
+                    .append("\"phone\":").append(JsonHelper.quote(m.phone)).append(",")
+                    .append("\"subject\":").append(JsonHelper.quote(m.subject)).append(",")
+                    .append("\"message\":").append(JsonHelper.quote(m.message)).append(",")
+                    .append("\"status\":").append(JsonHelper.quote(m.status != null ? m.status : "new")).append(",")
+                    .append("\"admin_note\":").append(JsonHelper.quote(m.adminNote != null ? m.adminNote : "")).append(",")
+                    .append("\"created_at\":").append(JsonHelper.quote(m.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String studentsToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < accounts.size(); i++) {
+            if (i > 0) sb.append(",");
+            Account a = accounts.get(i);
+            String plain = AuthService.decryptSecret(a.passwordCiphertext);
+            sb.append("{")
+                    .append("\"id\":").append(a.id).append(",")
+                    .append("\"firstName\":").append(JsonHelper.quote(a.firstName)).append(",")
+                    .append("\"lastName\":").append(JsonHelper.quote(a.lastName)).append(",")
+                    .append("\"age\":").append(a.age != null ? a.age : "null").append(",")
+                    .append("\"course\":").append(JsonHelper.quote(a.course != null ? a.course : "")).append(",")
+                    .append("\"phone\":").append(JsonHelper.quote(a.phone != null ? a.phone : "")).append(",")
+                    .append("\"role\":").append(JsonHelper.quote(a.role)).append(",")
+                    .append("\"login\":").append(JsonHelper.quote(a.login)).append(",")
+                    .append("\"password\":").append(JsonHelper.quote(plain)).append(",")
+                    .append("\"avatar\":").append(JsonHelper.quote(a.avatar)).append(",")
+                    .append("\"createdAt\":").append(JsonHelper.quote(a.createdAt))
+                    .append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    public String homepageToJson() {
+        StringBuilder statsSb = new StringBuilder("[");
+        for (int i = 0; i < homepage.stats.size(); i++) {
+            if (i > 0) statsSb.append(",");
+            StatItem s = homepage.stats.get(i);
+            statsSb.append("{\"value\":").append(JsonHelper.quote(s.value)).append(",\"label\":").append(JsonHelper.quote(s.label)).append("}");
+        }
+        statsSb.append("]");
+
+        StringBuilder photosSb = new StringBuilder("[");
+        for (int i = 0; i < homepage.heroPhotos.size(); i++) {
+            if (i > 0) photosSb.append(",");
+            HeroPhoto p = homepage.heroPhotos.get(i);
+            photosSb.append("{\"id\":").append(JsonHelper.quote(p.id))
+                    .append(",\"title\":").append(JsonHelper.quote(p.title))
+                    .append(",\"image\":").append(JsonHelper.quote(p.image))
+                    .append(",\"tag\":").append(JsonHelper.quote(p.tag)).append("}");
+        }
+        photosSb.append("]");
+
+        return "{"
+                + "\"eyebrowBadge\":" + JsonHelper.quote(homepage.eyebrowBadge) + ","
+                + "\"eyebrowStatus\":" + JsonHelper.quote(homepage.eyebrowStatus) + ","
+                + "\"titlePrefix\":" + JsonHelper.quote(homepage.titlePrefix) + ","
+                + "\"titleHighlight\":" + JsonHelper.quote(homepage.titleHighlight) + ","
+                + "\"titleSuffix\":" + JsonHelper.quote(homepage.titleSuffix) + ","
+                + "\"leadText\":" + JsonHelper.quote(homepage.leadText) + ","
+                + "\"stats\":" + statsSb + ","
+                + "\"heroPhotos\":" + photosSb + ","
+                + "\"updatedAt\":" + JsonHelper.quote(homepage.updatedAt)
+                + "}";
     }
 }

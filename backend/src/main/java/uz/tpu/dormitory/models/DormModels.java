@@ -301,4 +301,59 @@ public class DormModels {
         public String createdAt;
         public List<ChatMessage> messages = new ArrayList<>();
     }
+
+    public static class Facility {
+        public long id;
+        public String iconName;
+        public String category;
+        public String title;
+        public String sub;
+        public String badge;
+        public int sortOrder;
+        public String createdAt;
+
+        public Facility(long id, String iconName, String category, String title, String sub, String badge, int sortOrder, String createdAt) {
+            this.id = id;
+            this.iconName = iconName != null ? iconName : "Wifi";
+            this.category = category != null ? category : "amenity";
+            this.title = title;
+            this.sub = sub != null ? sub : "";
+            this.badge = badge != null ? badge : "";
+            this.sortOrder = sortOrder;
+            this.createdAt = createdAt;
+        }
+    }
+
+    public static class AdminActivityLog {
+        public long id;
+        public Long adminId;
+        public String adminLogin;
+        public String adminName;
+        public String actionType;
+        public String section;
+        public String entityLabel;
+        public String targetName;
+        public String clientName;
+        public String clientPhone;
+        public String summary;
+        public String createdAt;
+
+        public AdminActivityLog(long id, Long adminId, String adminLogin, String adminName,
+                                String actionType, String section, String entityLabel,
+                                String targetName, String clientName, String clientPhone,
+                                String summary, String createdAt) {
+            this.id = id;
+            this.adminId = adminId;
+            this.adminLogin = adminLogin != null ? adminLogin : "AdminTPU";
+            this.adminName = adminName != null ? adminName : "TPU Administrator";
+            this.actionType = actionType != null ? actionType : "update";
+            this.section = section != null ? section : "general";
+            this.entityLabel = entityLabel != null ? entityLabel : "";
+            this.targetName = targetName != null ? targetName : "";
+            this.clientName = clientName != null ? clientName : "";
+            this.clientPhone = clientPhone != null ? clientPhone : "";
+            this.summary = summary != null ? summary : "";
+            this.createdAt = createdAt;
+        }
+    }
 }

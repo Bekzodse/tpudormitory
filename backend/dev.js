@@ -1,8 +1,11 @@
 import { spawn } from "node:child_process";
 
-const api = spawn("node", ["--watch", "backend/index.js"], { stdio: "inherit", shell: true });
-const vite5173 = spawn("npx", ["vite", "--port", "5173"], { stdio: "inherit", shell: true });
-const vite5174 = spawn("npx", ["vite", "--port", "5174"], { stdio: "inherit", shell: true });
+const useShell = process.platform === "win32";
+const npxCmd = useShell ? "npx.cmd" : "npx";
+
+const api = spawn(process.execPath, ["--watch", "backend/index.js"], { stdio: "inherit", shell: false });
+const vite5173 = spawn(npxCmd, ["vite", "--port", "5173"], { stdio: "inherit", shell: useShell });
+const vite5174 = spawn(npxCmd, ["vite", "--port", "5174"], { stdio: "inherit", shell: useShell });
 
 const shutdown = (signal) => {
   api.kill(signal);

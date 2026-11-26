@@ -30,6 +30,61 @@ export const MESSAGE_STATUS_LABELS = {
   replied: "Javob berildi"
 };
 
+export const ACTION_TYPE_LABELS = {
+  create: "Yaratildi",
+  update: "Tahrirlandi",
+  delete: "O‘chirildi",
+  contact: "Klient bilan bog‘landi"
+};
+
+export const SECTION_LABELS = {
+  bookings: "Bron so‘rovlari",
+  chats: "Support Chatlar",
+  rooms: "Xona turlari",
+  dormRooms: "Xona raqamlari",
+  residents: "Yashovchi talabalar",
+  students: "Talaba akkauntlari",
+  payments: "To‘lovlar va moliya",
+  maintenance: "Texnik xizmat",
+  announcements: "E’lonlar",
+  messages: "Aloqa xabarlari",
+  gallery: "Fotogalereya",
+  facilities: "Qulayliklar",
+  homepage: "Bosh sahifa",
+  faqs: "Savol-Javob (FAQ)",
+  bottomTexts: "Pastki gaplar",
+  clients: "Klientlar bilan aloqa",
+  database: "Ma’lumotlar bazasi"
+};
+
+export function downloadActivityLogsCsv(logs) {
+  const headers = [
+    "ID", "Vaqt", "Admin", "Harakat turi", "Bo‘lim", "Ob’ekt", "Klient", "Telefon", "Tavsif"
+  ];
+  const escapeCell = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
+  const rows = (logs || []).map((l) =>
+    [
+      l.id,
+      l.createdAt,
+      `${l.adminName} (${l.adminLogin})`,
+      ACTION_TYPE_LABELS[l.actionType] || l.actionType,
+      SECTION_LABELS[l.section] || l.section,
+      l.targetName || l.entityLabel || "",
+      l.clientName || "",
+      l.clientPhone || "",
+      l.summary || ""
+    ].map(escapeCell).join(",")
+  );
+  const csv = "\uFEFF" + [headers.map(escapeCell).join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tpu-admin-ishlar-jurnali-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function parseUzsAmount(priceText) {
   const digits = String(priceText || "").replace(/\D/g, "");
   return digits ? Number(digits) : 0;

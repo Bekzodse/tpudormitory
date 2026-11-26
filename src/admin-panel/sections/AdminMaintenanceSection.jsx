@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { AlertTriangle, Trash2, Wrench } from "lucide-react";
+import { AlertTriangle, Pencil, Trash2, Wrench } from "lucide-react";
 import { MAINT_LABELS, PRIO_LABELS, SectionTotalsBar } from "../utils/AdminHelpers";
 
-export default function AdminMaintenanceSection({ overview, busyId, runAdminRequest }) {
+export default function AdminMaintenanceSection({ overview, busyId, runAdminRequest, onEditMaintenance }) {
   const [maintFilter, setMaintFilter] = useState("all");
   const [prioFilter, setPrioFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -159,6 +159,15 @@ export default function AdminMaintenanceSection({ overview, busyId, runAdminRequ
                     {st.label}
                   </button>
                 ))}
+                {onEditMaintenance && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onEditMaintenance(m)}
+                  >
+                    <Pencil size={13} /> Tahrirlash
+                  </button>
+                )}
                 <button
                   type="button"
                   className="avatar-remove-btn booking-delete-btn"

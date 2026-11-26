@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Building2,
   Camera,
   Check,
   FolderPlus,
@@ -99,6 +100,17 @@ export default function AdminSiteContentSection({
   const [newFaq, setNewFaq] = useState({ q: "", a: "" });
   const [faqEdits, setFaqEdits] = useState({});
   const [editingFaqId, setEditingFaqId] = useState(null);
+
+  // 6. Facilities state
+  const [newFacility, setNewFacility] = useState({
+    title: "",
+    sub: "",
+    category: "amenity",
+    badge: "Bepul",
+    iconName: "Wifi"
+  });
+  const [facilityEdits, setFacilityEdits] = useState({});
+  const [editingFacilityId, setEditingFacilityId] = useState(null);
 
   useEffect(() => {
     if (overview.homepage) {
@@ -268,6 +280,20 @@ export default function AdminSiteContentSection({
     if (ok) setNewFaq({ q: "", a: "" });
   };
 
+  const handleAddFacility = async (e) => {
+    e.preventDefault();
+    if (!newFacility.title.trim()) return;
+    const ok = await runAdminRequest({
+      url: "/api/admin/facilities",
+      body: newFacility,
+      busyKey: "add-facility",
+      successMsg: `"${newFacility.title}" qulayligi saytga qo‘shildi!`
+    });
+    if (ok) {
+      setNewFacility({ title: "", sub: "", category: "amenity", badge: "Bepul", iconName: "Wifi" });
+    }
+  };
+
   const sampleImages = (overview.availableImages || []).slice(0, 12);
   const bottomTextsList = overview.bottomTexts || [];
   const galleryBottomTexts = bottomTextsList.filter((b) => b.section === "gallery");
@@ -317,6 +343,14 @@ export default function AdminSiteContentSection({
           >
             <HelpCircle size={14} style={{ verticalAlign: "middle", marginRight: 5 }} />
             Savol-Javoblar (FAQ) ({(overview.faqs || []).length})
+          </button>
+          <button
+            type="button"
+            className={`compare-tab-btn ${subTab === "facilities" ? "active" : ""}`}
+            onClick={() => setSubTab("facilities")}
+          >
+            <Building2 size={14} style={{ verticalAlign: "middle", marginRight: 5 }} />
+            Qulayliklar (Facilities) ({(overview.facilities || []).length})
           </button>
         </div>
       </div>
@@ -1278,6 +1312,222 @@ export default function AdminSiteContentSection({
             })}
           </div>
         </>
+      )}
+
+      {subTab === "facilities" && (
+        <div className="admin-site-content-stack">
+          <section className="admin-panel-card">
+            <div className="admin-panel-card-head">
+              <div>
+                <h2><Building2 size={18} /> Yangi Qulaylik Qo‘shish (Sayt #facilities bo‘limi)</h2>
+                <small style={{ color: "var(--color-muted)", fontSize: 12.5 }}>
+                  Saytdagi Qulayliklar sahifasiga yangi karta yarating, tahrirlang yoki o‘chiring.
+                </small>
+              </div>
+            </div>
+            <form onSubmit={handleAddFacility} className="admin-modal-form" style={{ marginTop: 6 }}>
+              <label className="input-group">
+                <span>Qulaylik nomi *</span>
+                <input
+                  required
+                  placeholder="Masalan: 24/7 Tibbiy punkt"
+                  value={newFacility.title}
+                  onChange={(e) => setNewFacility((p) => ({ ...p, title: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Yorliq (Badge)</span>
+                <input
+                  placeholder="Masalan: 24/7 / Bepul"
+                  value={newFacility.badge}
+                  onChange={(e) => setNewFacility((p) => ({ ...p, badge: e.target.value }))}
+                />
+              </label>
+              <label className="input-group">
+                <span>Kategoriya</span>
+                <select
+                  value={newFacility.category}
+                  onChange={(e) => setNewFacility((p) => ({ ...p, category: e.target.value }))}
+                >
+                  <option value="study">O‘qish va Karyera (study)</option>
+                  <option value="dining">Oshxona (dining)</option>
+                  <option value="sports">Sport (sports)</option>
+                  <option value="security">Xavfsizlik (security)</option>
+                  <option value="amenity">Umumiy qulaylik (amenity)</option>
+                </select>
+              </label>
+              <label className="input-group">
+                <span>Ikonka</span>
+                <select
+                  value={newFacility.iconName}
+                  onChange={(e) => setNewFacility((p) => ({ ...p, iconName: e.target.value }))}
+                >
+                  <option value="Wifi">Wi-Fi</option>
+                  <option value="ShieldCheck">Xavfsizlik (Shield)</option>
+                  <option value="Utensils">Oshxona (Utensils)</option>
+                  <option value="WashingMachine">Kir yuvish</option>
+                  <option value="Dumbbell">Sport / Fitness</option>
+                  <option value="BookOpen">Kutubxona / O‘qish</option>
+                  <option value="Armchair">Dam olish zali</option>
+                  <option value="CarFront">Avtoturargoh</option>
+                </select>
+              </label>
+              <label className="input-group is-full">
+                <span>Qulaylik tavsifi *</span>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="Qulaylik haqida qisqacha ma’lumot..."
+                  value={newFacility.sub}
+                  onChange={(e) => setNewFacility((p) => ({ ...p, sub: e.target.value }))}
+                />
+              </label>
+              <div className="is-full" style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button type="submit" className="btn btn-primary btn-sm" disabled={busyId === "add-facility"}>
+                  <Plus size={14} /> {busyId === "add-facility" ? "Qo‘shilmoqda..." : "Qulaylikni qo‘shish"}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <div className="admin-bookings-list">
+            {(overview.facilities || []).map((fac) => {
+              const isEditing = editingFacilityId === fac.id;
+              const draft = facilityEdits[fac.id] || {
+                title: fac.title,
+                sub: fac.sub || "",
+                category: fac.category || "amenity",
+                badge: fac.badge || "",
+                iconName: fac.iconName || "Wifi"
+              };
+              return (
+                <article className="admin-booking-card" key={fac.id}>
+                  <div className="booking-card-top">
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <span className="admin-room-num-badge">{fac.badge || fac.category}</span>
+                      <h3>{fac.title}</h3>
+                      <small style={{ color: "var(--color-muted)" }}>({fac.category} • {fac.iconName})</small>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          if (isEditing) setEditingFacilityId(null);
+                          else {
+                            setFacilityEdits((p) => ({
+                              ...p,
+                              [fac.id]: {
+                                title: fac.title,
+                                sub: fac.sub || "",
+                                category: fac.category || "amenity",
+                                badge: fac.badge || "",
+                                iconName: fac.iconName || "Wifi"
+                              }
+                            }));
+                            setEditingFacilityId(fac.id);
+                          }
+                        }}
+                      >
+                        <Pencil size={13} /> {isEditing ? "Bekor" : "Tahrirlash"}
+                      </button>
+                      <button
+                        type="button"
+                        className="avatar-remove-btn"
+                        disabled={busyId === `del-fac-${fac.id}`}
+                        onClick={() =>
+                          runAdminRequest({
+                            url: `/api/admin/facilities/${fac.id}`,
+                            method: "DELETE",
+                            busyKey: `del-fac-${fac.id}`,
+                            successMsg: `"${fac.title}" qulayligi o‘chirildi.`
+                          })
+                        }
+                      >
+                        <Trash2 size={13} /> O‘chirish
+                      </button>
+                    </div>
+                  </div>
+
+                  {isEditing ? (
+                    <div className="admin-modal-form" style={{ marginTop: 10 }}>
+                      <label className="input-group">
+                        <span>Nomi *</span>
+                        <input
+                          value={draft.title}
+                          onChange={(e) => setFacilityEdits((p) => ({ ...p, [fac.id]: { ...draft, title: e.target.value } }))}
+                        />
+                      </label>
+                      <label className="input-group">
+                        <span>Badge</span>
+                        <input
+                          value={draft.badge}
+                          onChange={(e) => setFacilityEdits((p) => ({ ...p, [fac.id]: { ...draft, badge: e.target.value } }))}
+                        />
+                      </label>
+                      <label className="input-group">
+                        <span>Kategoriya</span>
+                        <select
+                          value={draft.category}
+                          onChange={(e) => setFacilityEdits((p) => ({ ...p, [fac.id]: { ...draft, category: e.target.value } }))}
+                        >
+                          <option value="study">O‘qish va Karyera (study)</option>
+                          <option value="dining">Oshxona (dining)</option>
+                          <option value="sports">Sport (sports)</option>
+                          <option value="security">Xavfsizlik (security)</option>
+                          <option value="amenity">Umumiy qulaylik (amenity)</option>
+                        </select>
+                      </label>
+                      <label className="input-group">
+                        <span>Ikonka</span>
+                        <select
+                          value={draft.iconName}
+                          onChange={(e) => setFacilityEdits((p) => ({ ...p, [fac.id]: { ...draft, iconName: e.target.value } }))}
+                        >
+                          <option value="Wifi">Wi-Fi</option>
+                          <option value="ShieldCheck">Xavfsizlik (Shield)</option>
+                          <option value="Utensils">Oshxona (Utensils)</option>
+                          <option value="WashingMachine">Kir yuvish</option>
+                          <option value="Dumbbell">Sport / Fitness</option>
+                          <option value="BookOpen">Kutubxona / O‘qish</option>
+                          <option value="Armchair">Dam olish zali</option>
+                          <option value="CarFront">Avtoturargoh</option>
+                        </select>
+                      </label>
+                      <label className="input-group is-full">
+                        <span>Tavsif</span>
+                        <textarea
+                          rows={2}
+                          value={draft.sub}
+                          onChange={(e) => setFacilityEdits((p) => ({ ...p, [fac.id]: { ...draft, sub: e.target.value } }))}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={busyId === `save-fac-${fac.id}`}
+                        onClick={async () => {
+                          const ok = await runAdminRequest({
+                            url: `/api/admin/facilities/${fac.id}`,
+                            method: "PATCH",
+                            body: draft,
+                            busyKey: `save-fac-${fac.id}`,
+                            successMsg: "Qulaylik yangilandi!"
+                          });
+                          if (ok) setEditingFacilityId(null);
+                        }}
+                      >
+                        <Check size={14} /> Saqlash
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="admin-msg-body" style={{ marginTop: 6 }}>{fac.sub}</p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </div>
       )}
     </>
   );

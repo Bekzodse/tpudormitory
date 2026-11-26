@@ -1,7 +1,12 @@
 import crypto from "node:crypto";
 
-export const sessionMaxAge = 1000 * 60 * 60 * 8;
-const sessions = new Map();
+export const sessionMaxAge = 1000 * 60 * 60 * 24 * 7; // 7 days persistent session
+const memorySessions = new Map();
+let sessionDb = null;
+
+export function attachSessionDb(dbInstance) {
+  sessionDb = dbInstance;
+}
 
 const secretKey = crypto
   .createHash("sha256")
@@ -79,28 +84,85 @@ export function validateAvatar(avatar) {
 
 export function createSession(response, accountId) {
   const token = crypto.randomBytes(32).toString("base64url");
-  sessions.set(token, { accountId, expiresAt: Date.now() + sessionMaxAge });
+  const expiresAt = Date.now() + sessionMaxAge;
+  if (sessionDb) {
+    try {
+      sessionDb.prepare("DELETE FROM sessions WHERE expires_at < ?").run(Date.now());
+      sessionDb.prepare(
+        "INSERT OR REPLACE INTO sessions (token, account_id, expires_at) VALUES (?, ?, ?)"
+      ).run(token, Number(accountId), expiresAt);
+    } catch (err) {
+      console.error("[Session DB Write Error]", err.message || err);
+    }
+  }
+  memorySessions.set(token, { accountId: Number(accountId), expiresAt });
   response.setHeader(
     "Set-Cookie",
-    `student_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${sessionMaxAge / 1000}`
+    `student_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(sessionMaxAge / 1000)}`
   );
   return token;
 }
 
 export function clearSession(request, response) {
   const token = request.headers.cookie?.match(/student_session=([^;]+)/)?.[1];
-  if (token) sessions.delete(token);
+  if (token) {
+    memorySessions.delete(token);
+    if (sessionDb) {
+      try {
+        sessionDb.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+      } catch {
+        // ignore
+      }
+    }
+  }
   response.setHeader("Set-Cookie", "student_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
 }
 
 export function getSession(request) {
   const token = request.headers.cookie?.match(/student_session=([^;]+)/)?.[1];
   if (!token) return null;
-  const session = sessions.get(token);
-  if (!session || session.expiresAt < Date.now()) {
-    sessions.delete(token);
+
+  const now = Date.now();
+  let session = memorySessions.get(token);
+
+  if (!session && sessionDb) {
+    try {
+      const row = sessionDb.prepare("SELECT account_id, expires_at FROM sessions WHERE token = ?").get(token);
+      if (row) {
+        session = { accountId: Number(row.account_id), expiresAt: Number(row.expires_at) };
+        memorySessions.set(token, session);
+      }
+    } catch (err) {
+      console.error("[Session DB Read Error]", err.message || err);
+    }
+  }
+
+  if (!session || session.expiresAt < now) {
+    memorySessions.delete(token);
+    if (sessionDb) {
+      try {
+        sessionDb.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+      } catch {
+        // ignore
+      }
+    }
     return null;
   }
+
+  // Sliding refresh when less than 6 days remain
+  if (session.expiresAt - now < sessionMaxAge - 1000 * 60 * 60 * 24) {
+    const nextExpiry = now + sessionMaxAge;
+    session.expiresAt = nextExpiry;
+    memorySessions.set(token, session);
+    if (sessionDb) {
+      try {
+        sessionDb.prepare("UPDATE sessions SET expires_at = ? WHERE token = ?").run(nextExpiry, token);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   return session;
 }
 

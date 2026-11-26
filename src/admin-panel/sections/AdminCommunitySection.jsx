@@ -9,6 +9,9 @@ export default function AdminCommunitySection({
   onEditAccount,
   onNewAccount,
   onEditAnnouncement,
+  onNewMessage,
+  onEditMessage,
+  onLogContact,
   showToast
 }) {
   const [portalSubTab, setPortalSubTab] = useState("accounts");
@@ -138,12 +141,19 @@ export default function AdminCommunitySection({
               )}
             </>
           ) : (
-            <select value={msgFilter} onChange={(e) => setMsgFilter(e.target.value)}>
-              <option value="all">Barcha xabarlar ({overview.messages.length})</option>
-              <option value="new">Yangi ({overview.messages.filter((m) => (m.status || "new") === "new").length})</option>
-              <option value="read">Ko‘rib chiqilgan</option>
-              <option value="replied">Javob berilgan</option>
-            </select>
+            <>
+              <select value={msgFilter} onChange={(e) => setMsgFilter(e.target.value)}>
+                <option value="all">Barcha xabarlar ({overview.messages.length})</option>
+                <option value="new">Yangi ({overview.messages.filter((m) => (m.status || "new") === "new").length})</option>
+                <option value="read">Ko‘rib chiqilgan</option>
+                <option value="replied">Javob berilgan</option>
+              </select>
+              {onNewMessage && (
+                <button type="button" className="btn btn-primary btn-sm" onClick={onNewMessage}>
+                  <Plus size={14} /> Yangi murojaat
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -181,6 +191,17 @@ export default function AdminCommunitySection({
                         {st.linkedBookingStatus ? STATUS_LABELS[st.linkedBookingStatus] : "Akkaunt"}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      title="Akkauntni tahrirlash"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditAccount(st);
+                      }}
+                    >
+                      <Pencil size={12} /> Tahrirlash
+                    </button>
                     {st.role !== "admin" && (
                       <button
                         type="button"
@@ -293,7 +314,20 @@ export default function AdminCommunitySection({
                     <span className={`pay-pill ${msgSt === "replied" ? "is-paid" : msgSt === "read" ? "is-pending" : "is-overdue"}`}>
                       {MESSAGE_STATUS_LABELS[msgSt] || msgSt}
                     </span>
-                    <a href={`tel:${m.phone.replace(/\s+/g, "")}`} className="booking-contact-link">
+                    <a
+                      href={`tel:${m.phone.replace(/\s+/g, "")}`}
+                      className="booking-contact-link"
+                      onClick={() =>
+                        onLogContact &&
+                        onLogContact({
+                          section: "messages",
+                          clientName: `${m.first_name} ${m.last_name}`,
+                          clientPhone: m.phone,
+                          channel: "Telefon qo‘ng‘irog‘i",
+                          summary: `Aloqa murojaati (#${m.id}) bo‘yicha ${m.first_name} ${m.last_name} ga qo‘ng‘iroq qildi`
+                        })
+                      }
+                    >
                       <Phone size={13} /> {m.phone}
                     </a>
                   </div>
@@ -351,6 +385,15 @@ export default function AdminCommunitySection({
                       {st.key === "replied" && <Check size={13} />} {st.label}
                     </button>
                   ))}
+                  {onEditMessage && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onEditMessage(m)}
+                    >
+                      <Pencil size={13} /> Tahrirlash
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="avatar-remove-btn booking-delete-btn"

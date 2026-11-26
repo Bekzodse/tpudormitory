@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Check, Copy, CreditCard, Download } from "lucide-react";
+import { Check, Copy, CreditCard, Download, Pencil, Trash2 } from "lucide-react";
 import { downloadPaymentsCsv, formatUzs, PAYMENT_LABELS, SectionTotalsBar } from "../utils/AdminHelpers";
 
 export default function AdminPaymentsSection({
@@ -8,6 +8,7 @@ export default function AdminPaymentsSection({
   busyId,
   runAdminRequest,
   onEditResident,
+  onLogContact,
   showToast
 }) {
   const [payFilter, setPayFilter] = useState("all");
@@ -33,6 +34,15 @@ export default function AdminPaymentsSection({
     try {
       await navigator.clipboard.writeText(text);
       showToast("To‘lov eslatma matni nusxalandi!");
+      if (onLogContact) {
+        onLogContact({
+          section: "payments",
+          clientName: res.studentName,
+          clientPhone: res.phone,
+          channel: "To‘lov eslatmasi",
+          summary: `${res.studentName} (${res.roomNumber}-xona) ga to‘lov eslatmasini tayyorladi/yubordi`
+        });
+      }
     } catch {
       showToast("Eslatma matnini nusxalab bo‘lmadi.");
     }
@@ -187,12 +197,35 @@ export default function AdminPaymentsSection({
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    style={{ marginLeft: "auto" }}
                     onClick={() => copyPaymentReminder(res)}
                   >
                     <Copy size={13} /> Eslatma
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  style={{ marginLeft: "auto" }}
+                  onClick={() => onEditResident(res)}
+                >
+                  <Pencil size={13} /> Tahrirlash
+                </button>
+                <button
+                  type="button"
+                  className="avatar-remove-btn"
+                  title="Yozuvni o‘chirish"
+                  disabled={busyId === `del-pay-${res.id}`}
+                  onClick={() =>
+                    runAdminRequest({
+                      url: `/api/admin/residents/${res.id}`,
+                      method: "DELETE",
+                      busyKey: `del-pay-${res.id}`,
+                      successMsg: `${res.studentName} to‘lov ro‘yxatidan o‘chirildi.`
+                    })
+                  }
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
             </article>
           ))}

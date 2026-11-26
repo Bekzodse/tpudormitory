@@ -6815,3 +6815,131 @@ img {
   line-height: 1.45;
   color: var(--color-muted);
 }
+
+/* Activity Log (Manager Audit Trail) & Chat Message Controls */
+.pay-pill.is-contact {
+  background: #ede9fe;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+.admin-log-card.action-create {
+  border-left: 4px solid #10b981;
+}
+
+.admin-log-card.action-update {
+  border-left: 4px solid #f59e0b;
+}
+
+.admin-log-card.action-delete {
+  border-left: 4px solid #ef4444;
+}
+
+.admin-log-card.action-contact {
+  border-left: 4px solid #7c3aed;
+}
+
+.admin-log-icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.admin-log-icon-badge.action-create {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.admin-log-icon-badge.action-update {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.admin-log-icon-badge.action-delete {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.admin-log-icon-badge.action-contact {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.chat-msg-action-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.chat-msg-action-btn:hover {
+  opacity: 1;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+/* Admin Database Explorer Table */
+.admin-db-schema-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.admin-db-col-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: #f1f6ff;
+  border: 1px solid #d5e5fc;
+  font-size: 11.5px;
+  color: var(--blue-navy);
+}
+
+.admin-db-col-chip small {
+  color: var(--color-muted);
+  font-size: 10.5px;
+}
+
+.admin-db-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e2ecfc;
+  border-radius: 12px;
+}
+
+.admin-db-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.admin-db-table th,
+.admin-db-table td {
+  padding: 9px 11px;
+  text-align: left;
+  border-bottom: 1px solid #edf3fc;
+  white-space: nowrap;
+}
+
+.admin-db-table th {
+  background: #f7faff;
+  color: var(--blue-navy);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+}
+
+.admin-db-table tbody tr:hover {
+  background: #f9fbff;
+}

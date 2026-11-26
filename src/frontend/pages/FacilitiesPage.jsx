@@ -1,8 +1,22 @@
 import React from "react";
-import { Building2, CalendarDays, Check } from "lucide-react";
-import { facilitiesList } from "../data/dormData";
+import {
+  Armchair, BookOpen, Building2, CalendarDays, CarFront, Check,
+  Dumbbell, ShieldCheck, Utensils, WashingMachine, Wifi
+} from "lucide-react";
 
-export default function FacilitiesPage({ facilities, category, setCategory, openBooking }) {
+const FACILITY_ICONS = {
+  Wifi,
+  ShieldCheck,
+  Utensils,
+  WashingMachine,
+  Dumbbell,
+  BookOpen,
+  Armchair,
+  CarFront,
+  Building2
+};
+
+export default function FacilitiesPage({ facilities, totalCount, category, setCategory, openBooking }) {
   return (
     <div className="page-view-wrap section-wrap">
       <div className="section-header-centered">
@@ -19,7 +33,7 @@ export default function FacilitiesPage({ facilities, category, setCategory, open
             className={`btn-filter ${category === "all" ? "active" : ""}`}
             onClick={() => setCategory("all")}
           >
-            Barchasi ({facilitiesList.length})
+            Barchasi ({totalCount ?? facilities.length})
           </button>
           <button
             className={`btn-filter ${category === "study" ? "active" : ""}`}
@@ -50,7 +64,7 @@ export default function FacilitiesPage({ facilities, category, setCategory, open
 
       <div className="facility-grid">
         {facilities.map((fac) => {
-          const Icon = fac.icon;
+          const Icon = fac.icon || FACILITY_ICONS[fac.iconName] || Building2;
           return (
             <article className="facility-card" key={fac.id}>
               <div className="facility-card-top">

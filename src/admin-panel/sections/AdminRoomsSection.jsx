@@ -457,10 +457,11 @@ export default function AdminRoomsSection({
                           <Pencil size={13} /> Batafsil
                         </button>
                       )}
-                      {r.id > 3 && (
+                      {overview.rooms.length > 1 && (
                         <button
                           type="button"
                           className="avatar-remove-btn"
+                          title="Xona turini o‘chirish"
                           onClick={() =>
                             runAdminRequest({
                               url: `/api/admin/rooms/${r.id}`,
@@ -638,6 +639,24 @@ export default function AdminRoomsSection({
                 {!isMaint && dr.available > 0 && (
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAddResident(dr.id)}>
                     <Plus size={13} /> Joylashtirish
+                  </button>
+                )}
+                {dr.occupied === 0 && (
+                  <button
+                    type="button"
+                    className="avatar-remove-btn"
+                    title="Xonani o‘chirish"
+                    disabled={busyId === `del-dorm-${dr.id}`}
+                    onClick={() =>
+                      runAdminRequest({
+                        url: `/api/admin/dorm-rooms/${dr.id}`,
+                        method: "DELETE",
+                        busyKey: `del-dorm-${dr.id}`,
+                        successMsg: `${dr.roomNumber}-xona o‘chirildi.`
+                      })
+                    }
+                  >
+                    <Trash2 size={13} />
                   </button>
                 )}
               </div>

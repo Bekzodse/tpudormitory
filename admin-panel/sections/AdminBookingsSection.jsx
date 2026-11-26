@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { CalendarDays, Check, DoorOpen, Download, MessageSquare, Phone, Send, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, DoorOpen, Download, MessageSquare, Pencil, Phone, Plus, Send, Trash2, X } from "lucide-react";
 import { downloadBookingsCsv, PAYMENT_LABELS, SectionTotalsBar, STATUS_LABELS } from "../utils/AdminHelpers";
 
 export default function AdminBookingsSection({
@@ -8,7 +8,10 @@ export default function AdminBookingsSection({
   busyId,
   runAdminRequest,
   onOpenUserFromBooking,
-  onOpenChatFromBooking
+  onOpenChatFromBooking,
+  onNewBooking,
+  onEditBooking,
+  onLogContact
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [roomCategoryFilter, setRoomCategoryFilter] = useState("all");
@@ -79,6 +82,11 @@ export default function AdminBookingsSection({
           >
             <Download size={14} /> CSV yuklash
           </button>
+          {onNewBooking && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={onNewBooking}>
+              <Plus size={14} /> Yangi ariza
+            </button>
+          )}
         </div>
       </div>
 
@@ -137,7 +145,20 @@ export default function AdminBookingsSection({
                 <div className="booking-details-grid">
                   <div className="booking-detail-item">
                     <small>Telefon raqam</small>
-                    <a href={`tel:${b.phone.replace(/\s+/g, "")}`} className="booking-contact-link">
+                    <a
+                      href={`tel:${b.phone.replace(/\s+/g, "")}`}
+                      className="booking-contact-link"
+                      onClick={() =>
+                        onLogContact &&
+                        onLogContact({
+                          section: "bookings",
+                          clientName: b.student_name,
+                          clientPhone: b.phone,
+                          channel: "Telefon qo‘ng‘irog‘i",
+                          summary: `Bron arizasi (#${b.id}) bo‘yicha ${b.student_name} ga qo‘ng‘iroq qildi`
+                        })
+                      }
+                    >
                       <Phone size={13} /> {b.phone}
                     </a>
                   </div>
@@ -149,6 +170,16 @@ export default function AdminBookingsSection({
                         target="_blank"
                         rel="noreferrer"
                         className="booking-contact-link"
+                        onClick={() =>
+                          onLogContact &&
+                          onLogContact({
+                            section: "bookings",
+                            clientName: b.student_name,
+                            clientPhone: b.phone,
+                            channel: "Telegram",
+                            summary: `${b.student_name} (${b.telegram}) bilan Telegram orqali bog‘landi`
+                          })
+                        }
                       >
                         <Send size={13} /> {b.telegram.startsWith("@") ? b.telegram : `@${b.telegram}`}
                       </a>
@@ -290,6 +321,15 @@ export default function AdminBookingsSection({
                       }
                     >
                       Kutilmoqdaga qaytarish
+                    </button>
+                  )}
+                  {onEditBooking && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => onEditBooking(b)}
+                    >
+                      <Pencil size={13} /> Tahrirlash
                     </button>
                   )}
                   {onOpenChatFromBooking && (
