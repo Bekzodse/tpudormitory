@@ -1,0 +1,2487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TPU Smart Dormitory — Project Walkthrough v1.0.0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --ink: #161b2e;
+      --body: #475166;
+      --muted: #6c768c;
+      --border: #e3e8f2;
+      --shadow: 0 4px 20px rgba(18, 28, 56, 0.045), 0 1px 2px rgba(18, 28, 56, 0.03);
+
+      --blue: #2952cc;
+      --blue-bg: #eaf0ff;
+      --blue-border: #3d63d4;
+
+      --amber: #a85016;
+      --amber-bg: #fbf0e5;
+      --amber-border: #ae591f;
+
+      --green: #257352;
+      --green-bg: #e3f4ec;
+      --green-border: #2e7b59;
+
+      --purple: #5b3ec4;
+      --purple-bg: #efeafd;
+      --purple-border: #6c4ec9;
+
+      --pill-bg: #eef2f8;
+      --pill-ink: #1e2740;
+      --line: #adb7c9;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #e9edf5;
+      color: var(--ink);
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    body.clean-mode {
+      background: var(--bg);
+    }
+
+    /* Viewport & 16:9 Stage */
+    .viewport {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stage {
+      width: 1600px;
+      height: 900px;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+      transform-origin: center center;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.14);
+      border-radius: 6px;
+    }
+
+    body.clean-mode .stage {
+      box-shadow: none;
+      border-radius: 0;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 86px 104px 76px;
+      display: none;
+      flex-direction: column;
+      background: var(--bg);
+    }
+
+    .slide.active {
+      display: flex;
+      animation: fadeSlide 0.24s ease-out;
+    }
+
+    body.clean-mode .slide.active {
+      animation: none;
+    }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes cardRise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes dashFlow {
+      from { stroke-dashoffset: 30; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.22; transform: scale(1); }
+      50% { opacity: 0.42; transform: scale(1.35); }
+    }
+
+    @keyframes pillGlow {
+      0%, 100% { border-color: #d5dce8; box-shadow: 0 2px 6px rgba(18, 28, 56, 0.03); }
+      15% { border-color: #3d63d4; box-shadow: 0 0 0 3px rgba(41, 82, 204, 0.14); }
+      32% { border-color: #d5dce8; box-shadow: 0 2px 6px rgba(18, 28, 56, 0.03); }
+    }
+
+    @keyframes phasePulse {
+      0%, 100% { box-shadow: 0 0 0 5px var(--bg), 0 0 0 6px rgba(37, 115, 82, 0.25); }
+      50% { box-shadow: 0 0 0 5px var(--bg), 0 0 0 13px rgba(37, 115, 82, 0.05); }
+    }
+
+    .dash-animated {
+      animation: dashFlow 1.6s linear infinite;
+    }
+
+    .slide.active .feature-card,
+    .slide.active .step-card,
+    .slide.active .del-card,
+    .slide.active .stat-card,
+    .slide.active .built-card {
+      animation: cardRise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .slide.active .feature-card:hover,
+    .slide.active .step-card:hover,
+    .slide.active .stat-card:hover,
+    .slide.active .built-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 28px rgba(18, 28, 56, 0.08);
+    }
+
+    .slide.active .feature-card:nth-child(1),
+    .slide.active .step-card:nth-child(1),
+    .slide.active .del-card:nth-child(1),
+    .slide.active .stat-card:nth-child(1),
+    .slide.active .built-card:nth-child(1) { animation-delay: 0.04s; }
+    .slide.active .feature-card:nth-child(2),
+    .slide.active .step-card:nth-child(2),
+    .slide.active .del-card:nth-child(2),
+    .slide.active .stat-card:nth-child(2),
+    .slide.active .built-card:nth-child(2) { animation-delay: 0.10s; }
+    .slide.active .feature-card:nth-child(3),
+    .slide.active .step-card:nth-child(3),
+    .slide.active .del-card:nth-child(3),
+    .slide.active .stat-card:nth-child(3),
+    .slide.active .built-card:nth-child(3) { animation-delay: 0.16s; }
+    .slide.active .feature-card:nth-child(4),
+    .slide.active .step-card:nth-child(4),
+    .slide.active .del-card:nth-child(4),
+    .slide.active .stat-card:nth-child(4) { animation-delay: 0.22s; }
+    .slide.active .feature-card:nth-child(5),
+    .slide.active .step-card:nth-child(5),
+    .slide.active .del-card:nth-child(5) { animation-delay: 0.28s; }
+    .slide.active .feature-card:nth-child(6),
+    .slide.active .step-card:nth-child(6) { animation-delay: 0.34s; }
+
+    .slide.active .chain-pill { animation: pillGlow 6s ease-in-out infinite; }
+    .slide.active .chain-pill:nth-of-type(1) { animation-delay: 0s; }
+    .slide.active .chain-pill:nth-of-type(3) { animation-delay: 1s; }
+    .slide.active .chain-pill:nth-of-type(5) { animation-delay: 2s; }
+    .slide.active .chain-pill:nth-of-type(7) { animation-delay: 3s; }
+    .slide.active .chain-pill:nth-of-type(9) { animation-delay: 4s; }
+    .slide.active .chain-pill:nth-of-type(11) { animation-delay: 5s; }
+
+    .slide.active .phase-dot.final {
+      animation: phasePulse 2.4s ease-in-out infinite;
+    }
+
+    body.clean-mode .dash-animated,
+    body.clean-mode .feature-card,
+    body.clean-mode .step-card,
+    body.clean-mode .del-card,
+    body.clean-mode .stat-card,
+    body.clean-mode .built-card,
+    body.clean-mode .chain-pill,
+    body.clean-mode .phase-dot.final {
+      animation: none !important;
+    }
+
+    /* Common Header Typography */
+    .eyebrow {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 14px;
+    }
+
+    .slide-title {
+      font-size: 54px;
+      font-weight: 800;
+      letter-spacing: -0.028em;
+      line-height: 1.1;
+      color: var(--ink);
+      margin-bottom: 18px;
+    }
+
+    .slide-lead {
+      font-size: 24px;
+      font-weight: 400;
+      line-height: 1.48;
+      color: var(--body);
+      max-width: 1200px;
+    }
+
+    .mono {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .code-pill {
+      display: inline-flex;
+      align-items: center;
+      background: var(--pill-bg);
+      color: var(--pill-ink);
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 16px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 7px;
+      white-space: nowrap;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 28px 30px;
+    }
+
+    .grid-3x2 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 42px;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 28px 30px 30px;
+      display: flex;
+      flex-direction: column;
+      min-height: 220px;
+    }
+
+    .icon-box {
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      flex-shrink: 0;
+    }
+
+    .icon-box svg {
+      width: 24px;
+      height: 24px;
+      stroke-width: 1.9;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .icon-blue { background: var(--blue-bg); color: var(--blue); }
+    .icon-amber { background: var(--amber-bg); color: var(--amber); }
+    .icon-green { background: var(--green-bg); color: var(--green); }
+    .icon-purple { background: var(--purple-bg); color: var(--purple); }
+
+    .card-title {
+      font-size: 23px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 10px;
+      letter-spacing: -0.015em;
+    }
+
+    .card-desc {
+      font-size: 18.5px;
+      line-height: 1.52;
+      color: var(--body);
+    }
+
+    /* Slide 1: Cover */
+    .slide-cover {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      padding: 80px 104px;
+      gap: 40px;
+    }
+
+    .cover-left {
+      max-width: 780px;
+    }
+
+    .cover-title {
+      font-size: 86px;
+      font-weight: 800;
+      letter-spacing: -0.036em;
+      line-height: 1.03;
+      color: var(--ink);
+      margin-bottom: 28px;
+    }
+
+    .cover-lead {
+      font-size: 27px;
+      line-height: 1.5;
+      color: var(--body);
+      margin-bottom: 36px;
+      max-width: 720px;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--green-bg);
+      color: var(--green);
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 19px;
+      font-weight: 500;
+      padding: 10px 22px;
+      border-radius: 999px;
+    }
+
+    .cover-right {
+      width: 560px;
+      height: 540px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* Slide 3: Architecture Diagram */
+    .arch-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 24px;
+    }
+
+    /* Slide 4: Inside the Code */
+    .code-layout {
+      display: grid;
+      grid-template-columns: 365px 365px 1fr;
+      gap: 34px;
+      margin-top: 38px;
+      align-items: start;
+    }
+
+    .col-head {
+      font-size: 23px;
+      font-weight: 700;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .col-head .accent-blue { color: var(--blue); }
+    .col-head .accent-amber { color: var(--amber); }
+
+    .layer-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .layer-box {
+      border-radius: 14px;
+      padding: 20px 22px;
+      border: 1.5px solid transparent;
+    }
+
+    .layer-box.blue {
+      background: var(--blue-bg);
+      border-color: #c9d8fb;
+    }
+
+    .layer-box.amber {
+      background: var(--amber-bg);
+      border-color: #ebd0b8;
+    }
+
+    .layer-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+
+    .layer-sub {
+      font-size: 17.5px;
+      color: var(--body);
+      line-height: 1.4;
+    }
+
+    .layer-arrow {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #8894aa;
+      font-size: 18px;
+    }
+
+    .layer-foot {
+      text-align: center;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 16.5px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-top: 4px;
+    }
+
+    /* Clean Tables (Slide 4 & Slide 7) */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 26px 28px 28px;
+    }
+
+    .table-card h3 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 16px;
+    }
+
+    .clean-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 17.5px;
+      border: 1px solid #d7dde9;
+    }
+
+    .clean-table th {
+      text-align: left;
+      background: #eef1f6;
+      color: var(--ink);
+      font-weight: 600;
+      padding: 12px 15px;
+      border: 1px solid #d7dde9;
+    }
+
+    .clean-table td {
+      padding: 11px 15px;
+      color: var(--body);
+      border: 1px solid #d7dde9;
+      vertical-align: top;
+    }
+
+    .clean-table td:first-child {
+      color: var(--ink);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* Slide 5: Numbered Flow Cards */
+    .step-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 26px 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 238px;
+    }
+
+    .step-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .step-num {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: #ffffff;
+      flex-shrink: 0;
+    }
+
+    .bg-blue { background: var(--blue); }
+    .bg-amber { background: var(--amber); }
+    .bg-green { background: var(--green); }
+    .bg-purple { background: var(--purple); }
+
+    .step-head h3 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .step-body {
+      font-size: 18px;
+      line-height: 1.5;
+      color: var(--body);
+      margin-bottom: 16px;
+    }
+
+    /* Slide 6: Data Model */
+    .er-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      margin-top: 18px;
+    }
+
+    .er-footer-strip {
+      margin-top: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 15.5px;
+      color: var(--body);
+    }
+
+    .er-footer-strip strong {
+      color: var(--ink);
+      font-size: 15.5px;
+    }
+
+    .er-footer-strip .code-pill {
+      font-size: 13.8px;
+      padding: 4px 10px;
+    }
+
+    /* Slide 7: API */
+    .api-layout {
+      display: grid;
+      grid-template-columns: 1.48fr 0.85fr;
+      gap: 28px;
+      margin-top: 34px;
+      align-items: stretch;
+    }
+
+    .rules-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+      margin-top: 8px;
+    }
+
+    .rules-list li {
+      font-size: 18.5px;
+      line-height: 1.45;
+      color: var(--body);
+      padding-left: 18px;
+      position: relative;
+    }
+
+    .rules-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    /* Slide 8: Browser App */
+    .browser-layout {
+      display: grid;
+      grid-template-columns: 450px 1fr;
+      gap: 26px;
+      margin-top: 34px;
+      flex: 1;
+    }
+
+    .screens-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 30px 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .screens-card h3 {
+      font-size: 25px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .route-group-label {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 10px;
+    }
+
+    .pill-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+    }
+
+    .browser-grid-2x2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 24px;
+    }
+
+    /* Slide 9: Delivery */
+    .delivery-cards {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 18px;
+      margin-top: 36px;
+    }
+
+    .del-card {
+      border-radius: 16px;
+      padding: 24px 22px 26px;
+      border: 1.5px solid;
+      min-height: 270px;
+    }
+
+    .del-card.blue { background: var(--blue-bg); border-color: #7c97e6; }
+    .del-card.amber { background: var(--amber-bg); border-color: #d39667; }
+    .del-card.purple { background: var(--purple-bg); border-color: #a68fe0; }
+    .del-card.green { background: var(--green-bg); border-color: #6ab091; }
+
+    .del-card h3 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--ink);
+      margin: 16px 0 10px;
+    }
+
+    .del-card p {
+      font-size: 17.5px;
+      line-height: 1.48;
+      color: var(--body);
+    }
+
+    .progress-track {
+      margin: 26px 0 28px;
+      width: 100%;
+      height: 24px;
+    }
+
+    .deploy-subhead {
+      font-size: 23px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 16px;
+    }
+
+    .pill-chain {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .chain-pill {
+      background: var(--surface);
+      border: 1px solid #d5dce8;
+      border-radius: 999px;
+      padding: 10px 20px;
+      font-size: 17.5px;
+      font-weight: 500;
+      color: var(--ink);
+      box-shadow: 0 2px 6px rgba(18, 28, 56, 0.03);
+    }
+
+    .chain-arrow {
+      color: #8a95aa;
+      font-size: 18px;
+    }
+
+    .callout-amber {
+      display: inline-flex;
+      align-items: center;
+      background: var(--amber-bg);
+      border: 1.5px solid #cb8957;
+      color: #6f340e;
+      border-radius: 999px;
+      padding: 11px 24px;
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    /* Slide 11: How It Was Built */
+    .built-layout {
+      display: grid;
+      grid-template-columns: 465px 1fr;
+      gap: 44px;
+      margin-top: 28px;
+      align-items: center;
+      flex: 1;
+    }
+
+    .built-left-label {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 14px;
+    }
+
+    .built-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .built-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 22px 24px;
+    }
+
+    .built-card h3 {
+      font-size: 21px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+
+    .built-card p {
+      font-size: 17.5px;
+      line-height: 1.45;
+      color: var(--body);
+    }
+
+    .built-footnote {
+      font-size: 17.5px;
+      line-height: 1.45;
+      color: var(--body);
+      margin-top: 16px;
+    }
+
+    .loop-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+
+    /* Slide 12: Journey */
+    .timeline-wrap {
+      margin-top: 44px;
+      position: relative;
+    }
+
+    .timeline-line {
+      position: absolute;
+      top: 14px;
+      left: 7%;
+      right: 7%;
+      height: 3px;
+      background: #cbd3e2;
+      z-index: 0;
+    }
+
+    .timeline-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .phase-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .phase-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--blue);
+      margin-bottom: 18px;
+      box-shadow: 0 0 0 5px var(--bg);
+    }
+
+    .phase-dot.final {
+      width: 30px;
+      height: 30px;
+      margin-top: -3px;
+      margin-bottom: 15px;
+      background: var(--green);
+    }
+
+    .phase-label {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--blue);
+      margin-bottom: 6px;
+    }
+
+    .phase-label.final {
+      color: var(--green);
+    }
+
+    .phase-name {
+      font-size: 17.5px;
+      line-height: 1.35;
+      color: var(--ink);
+      margin-bottom: 10px;
+      min-height: 46px;
+    }
+
+    .ver-pill {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 7px;
+    }
+
+    .ver-amber { background: var(--amber-bg); color: var(--amber); }
+    .ver-blue { background: var(--blue-bg); color: var(--blue); }
+    .ver-green { background: var(--green-bg); color: var(--green); }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 22px;
+      margin-top: 56px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 28px 30px;
+    }
+
+    .stat-num {
+      font-size: 60px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin-bottom: 12px;
+    }
+
+    .stat-num.blue { color: var(--blue); }
+    .stat-num.amber { color: var(--amber); }
+    .stat-num.green { color: var(--green); }
+    .stat-num.purple { color: var(--purple); }
+
+    .stat-desc {
+      font-size: 18px;
+      line-height: 1.45;
+      color: var(--body);
+    }
+
+    .journey-foot {
+      margin-top: 44px;
+      font-size: 22px;
+      color: var(--body);
+    }
+
+    /* Interactive HUD Controls */
+    .hud {
+      position: fixed;
+      bottom: 20px;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      border: 1px solid #d9e0ec;
+      border-radius: 999px;
+      padding: 6px 10px;
+      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+      z-index: 100;
+      user-select: none;
+    }
+
+    body.clean-mode .hud {
+      display: none !important;
+    }
+
+    .hud button {
+      border: none;
+      background: transparent;
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 11px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .hud button:hover {
+      background: #eef2f8;
+    }
+
+    .hud button.active-lang {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .hud-counter {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--body);
+      padding: 0 6px;
+      min-width: 56px;
+      text-align: center;
+    }
+
+    .hud-sep {
+      width: 1px;
+      height: 18px;
+      background: #dde3ee;
+    }
+
+    /* Slide Overview Modal */
+    .overview-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 22, 38, 0.78);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      display: none;
+      padding: 36px;
+      overflow-y: auto;
+    }
+
+    .overview-overlay.open {
+      display: block;
+    }
+
+    .overview-head {
+      max-width: 1360px;
+      margin: 0 auto 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #fff;
+    }
+
+    .overview-head h2 {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .overview-close {
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .overview-grid {
+      max-width: 1360px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+    }
+
+    .overview-item {
+      background: var(--surface);
+      border: 2px solid transparent;
+      border-radius: 14px;
+      padding: 18px;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .overview-item:hover {
+      transform: translateY(-2px);
+      border-color: var(--blue);
+    }
+
+    .overview-item.current {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(41, 82, 204, 0.25);
+    }
+
+    .overview-num {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--blue);
+      margin-bottom: 6px;
+    }
+
+    .overview-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+
+    .overview-sub {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Print / PDF */
+    @media print {
+      @page { size: 1600px 900px; margin: 0; }
+      html, body {
+        width: 1600px;
+        height: auto;
+        overflow: visible;
+        background: var(--bg);
+      }
+      .viewport {
+        display: block;
+        width: 1600px;
+        height: auto;
+      }
+      .stage {
+        transform: none !important;
+        width: 1600px;
+        height: auto;
+        box-shadow: none;
+        overflow: visible;
+      }
+      .slide {
+        position: relative !important;
+        display: flex !important;
+        width: 1600px;
+        height: 900px;
+        page-break-after: always;
+        break-after: page;
+        animation: none !important;
+      }
+      .hud, .overview-overlay { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="stage" id="stage">
+
+      <!-- =========================================================
+           SLIDE 1 — COVER
+      ========================================================== -->
+      <section class="slide slide-cover active" data-slide="1">
+        <div class="cover-left">
+          <div class="eyebrow" data-i18n="s1.eyebrow">PROJECT WALKTHROUGH · V1.0.0</div>
+          <h1 class="cover-title" data-i18n="s1.title">Smart Dormitory</h1>
+          <p class="cover-lead" data-i18n="s1.lead">
+            A full-stack dormitory portal &amp; ERP for Tashkent Perfect University. How students book rooms, how admins run operations, and how the parts talk to each other.
+          </p>
+          <div class="live-pill">
+            <span data-i18n="s1.pill">local · localhost:4173 · Node 22 / Java 21</span>
+          </div>
+        </div>
+        <div class="cover-right">
+          <svg viewBox="0 0 540 520" width="540" height="520" aria-label="Architecture preview">
+            <defs>
+              <path id="cover-path-1" d="M 278 115 C 392 115, 420 160, 420 220" />
+              <path id="cover-path-2" d="M 420 316 C 420 385, 385 424, 278 424" />
+            </defs>
+
+            <!-- Dashed curves -->
+            <use href="#cover-path-1" class="dash-animated" fill="none" stroke="#c0c8d8" stroke-width="3" stroke-dasharray="7 8" stroke-linecap="round" />
+            <use href="#cover-path-2" class="dash-animated" fill="none" stroke="#c0c8d8" stroke-width="3" stroke-dasharray="7 8" stroke-linecap="round" />
+
+            <!-- Animated dots with glow halos -->
+            <g>
+              <circle r="14" fill="#2952cc" opacity="0.2">
+                <animateMotion dur="3.4s" begin="-2.2s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1">
+                  <mpath href="#cover-path-1" />
+                </animateMotion>
+              </circle>
+              <circle r="7.5" fill="#2952cc">
+                <animateMotion dur="3.4s" begin="-2.2s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1">
+                  <mpath href="#cover-path-1" />
+                </animateMotion>
+              </circle>
+            </g>
+            <g>
+              <circle r="14" fill="#a85016" opacity="0.2">
+                <animateMotion dur="3.4s" begin="-1.3s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1">
+                  <mpath href="#cover-path-2" />
+                </animateMotion>
+              </circle>
+              <circle r="7.5" fill="#a85016">
+                <animateMotion dur="3.4s" begin="-1.3s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1">
+                  <mpath href="#cover-path-2" />
+                </animateMotion>
+              </circle>
+            </g>
+
+            <!-- web node -->
+            <rect x="64" y="64" width="214" height="102" rx="18" fill="#eaf0ff" stroke="#3d63d4" stroke-width="2.4" />
+            <text x="171" y="108" text-anchor="middle" font-size="22" font-weight="700" fill="#161b2e">web</text>
+            <text x="171" y="138" text-anchor="middle" font-size="19" fill="#2d374c">Vite + React 18</text>
+
+            <!-- api node -->
+            <rect x="304" y="218" width="214" height="102" rx="18" fill="#fbf0e5" stroke="#ae591f" stroke-width="2.4" />
+            <text x="411" y="262" text-anchor="middle" font-size="22" font-weight="700" fill="#161b2e">api</text>
+            <text x="411" y="292" text-anchor="middle" font-size="19" fill="#2d374c">Express 5 / Java 21</text>
+
+            <!-- db node -->
+            <rect x="64" y="372" width="214" height="102" rx="18" fill="#e3f4ec" stroke="#2e7b59" stroke-width="2.4" />
+            <text x="171" y="416" text-anchor="middle" font-size="22" font-weight="700" fill="#161b2e">db</text>
+            <text x="171" y="446" text-anchor="middle" font-size="19" fill="#2d374c">SQLite 3 (WAL)</text>
+          </svg>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 2 — THE PRODUCT
+      ========================================================== -->
+      <section class="slide" data-slide="2">
+        <div class="eyebrow" data-i18n="s2.eyebrow">THE PRODUCT</div>
+        <h2 class="slide-title" data-i18n="s2.title">What students and admins can do</h2>
+        <p class="slide-lead" data-i18n="s2.lead">
+          One unified platform covering student room discovery, online booking, live chat, and 12-module dormitory ERP operations.
+        </p>
+
+        <div class="grid-3x2">
+          <div class="feature-card">
+            <div class="icon-box icon-blue">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s2.c1.t">Accounts &amp; Student Portal</div>
+            <div class="card-desc" data-i18n="s2.c1.d">Register with course &amp; phone, upload an avatar, track room assignment, and stay logged in for 7 days.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-amber">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s2.c2.t">Room Catalog &amp; Booking</div>
+            <div class="card-desc" data-i18n="s2.c2.d">Browse 2-, 4-, and 6-bed rooms, compare features, pick a preferred room number, and submit a booking online.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-green">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s2.c3.t">Live Support Chat</div>
+            <div class="card-desc" data-i18n="s2.c3.d">Booking automatically opens a chat thread with dorm administration, complete with unread counters and history.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-purple">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s2.c4.t">12-Module Admin ERP</div>
+            <div class="card-desc" data-i18n="s2.c4.d">Manage floor maps, approve bookings into rooms, track monthly payments, maintenance tickets, and audit logs.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-amber">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s2.c5.t">Dynamic CMS &amp; Gallery</div>
+            <div class="card-desc" data-i18n="s2.c5.d">Edit homepage copy, KPI stats, hero photos, gallery categories, facilities, and FAQs without touching code.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-blue">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s2.c6.t">In-App DB Studio &amp; Parity</div>
+            <div class="card-desc" data-i18n="s2.c6.d">Inspect and edit all 19 SQLite tables from the admin panel, backed by both Express 5 and Java 21 servers.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 3 — ARCHITECTURE
+      ========================================================== -->
+      <section class="slide" data-slide="3">
+        <div class="eyebrow" data-i18n="s3.eyebrow">ARCHITECTURE</div>
+        <h2 class="slide-title" data-i18n="s3.title">The big picture: one SPA, dual runtimes, one database</h2>
+        <p class="slide-lead" data-i18n="s3.lead">
+          Every API call enters through port 4173 (proxied by Vite in dev, served directly in production). SQLite stays strictly server-side.
+        </p>
+
+        <div class="arch-wrap">
+          <svg viewBox="0 0 1392 490" width="1392" height="490" aria-label="System Architecture Diagram">
+            <defs>
+              <marker id="arrow-end" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M 0 1.2 L 8.5 5 L 0 8.8 z" fill="#7f8ba1" />
+              </marker>
+              <marker id="arrow-start" viewBox="0 0 10 10" refX="2" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M 10 1.2 L 1.5 5 L 10 8.8 z" fill="#7f8ba1" />
+              </marker>
+              <path id="arch-p1" d="M 250 156 L 372 156" />
+              <path id="arch-p2" d="M 632 156 L 758 156" />
+              <path id="arch-p3" d="M 1020 156 L 1140 156" />
+              <path id="arch-p4" d="M 889 248 L 889 348" />
+              <path id="arch-p5" d="M 1244 248 L 1244 348" />
+            </defs>
+
+            <!-- Server boundary dashed box -->
+            <rect x="342" y="16" width="1038" height="460" rx="22" fill="none" stroke="#b9c3d4" stroke-width="2" stroke-dasharray="5 5" />
+            <text x="366" y="48" font-family="JetBrains Mono, monospace" font-size="17" fill="#5b667c">TPU Smart Dormitory · Node.js (Express 5) or Java 21 Virtual Threads · Port 4173</text>
+
+            <!-- Connectors -->
+            <line x1="250" y1="156" x2="372" y2="156" stroke="#7f8ba1" stroke-width="2.2" marker-end="url(#arrow-end)" />
+            <text x="302" y="190" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="17" fill="#475166">:4173</text>
+
+            <line x1="632" y1="156" x2="758" y2="156" stroke="#7f8ba1" stroke-width="2.2" marker-end="url(#arrow-end)" />
+            <text x="695" y="190" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="17" fill="#475166">/api/*</text>
+
+            <line x1="1020" y1="156" x2="1140" y2="156" stroke="#7f8ba1" stroke-width="2.2" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
+            <text x="1080" y="190" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="17" fill="#475166">SQL</text>
+
+            <line x1="889" y1="248" x2="889" y2="348" stroke="#7f8ba1" stroke-width="2.2" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
+            <text x="908" y="304" font-family="JetBrains Mono, monospace" font-size="17" fill="#475166">images</text>
+
+            <line x1="1244" y1="248" x2="1244" y2="348" stroke="#7f8ba1" stroke-width="2.2" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)" />
+            <text x="1262" y="304" font-family="JetBrains Mono, monospace" font-size="17" fill="#475166">WAL</text>
+
+            <!-- Animated flow dots -->
+            <circle r="13" fill="#2952cc" opacity="0.2">
+              <animateMotion dur="2.6s" begin="-0.7s" repeatCount="indefinite"><mpath href="#arch-p1" /></animateMotion>
+            </circle>
+            <circle r="7" fill="#2952cc">
+              <animateMotion dur="2.6s" begin="-0.7s" repeatCount="indefinite"><mpath href="#arch-p1" /></animateMotion>
+            </circle>
+
+            <circle r="13" fill="#257352" opacity="0.2">
+              <animateMotion dur="2.6s" begin="-1.3s" repeatCount="indefinite"><mpath href="#arch-p2" /></animateMotion>
+            </circle>
+            <circle r="7" fill="#257352">
+              <animateMotion dur="2.6s" begin="-1.3s" repeatCount="indefinite"><mpath href="#arch-p2" /></animateMotion>
+            </circle>
+
+            <circle r="12" fill="#257352" opacity="0.18">
+              <animateMotion dur="2.8s" begin="-1.8s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear"><mpath href="#arch-p3" /></animateMotion>
+            </circle>
+            <circle r="6.5" fill="#257352">
+              <animateMotion dur="2.8s" begin="-1.8s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear"><mpath href="#arch-p3" /></animateMotion>
+            </circle>
+
+            <circle r="13" fill="#a85016" opacity="0.2">
+              <animateMotion dur="2.4s" begin="-1.0s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear"><mpath href="#arch-p4" /></animateMotion>
+            </circle>
+            <circle r="7" fill="#a85016">
+              <animateMotion dur="2.4s" begin="-1.0s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear"><mpath href="#arch-p4" /></animateMotion>
+            </circle>
+
+            <circle r="12" fill="#257352" opacity="0.18">
+              <animateMotion dur="2.6s" begin="-0.4s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear"><mpath href="#arch-p5" /></animateMotion>
+            </circle>
+            <circle r="6.5" fill="#257352">
+              <animateMotion dur="2.6s" begin="-0.4s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear"><mpath href="#arch-p5" /></animateMotion>
+            </circle>
+
+            <!-- Browser box -->
+            <rect x="6" y="76" width="244" height="162" rx="18" fill="#ffffff" stroke="#d9e0ec" stroke-width="2" />
+            <text x="28" y="114" font-size="23" font-weight="700" fill="#161b2e">browser</text>
+            <text x="28" y="144" font-size="18.5" font-weight="600" fill="#2952cc">React 18 SPA</text>
+            <text x="28" y="174" font-size="17.5" fill="#475166">7 public views, modals,</text>
+            <text x="28" y="198" font-size="17.5" fill="#475166">chat &amp; Admin ERP</text>
+
+            <!-- web box -->
+            <rect x="378" y="76" width="254" height="162" rx="18" fill="#eaf0ff" stroke="#3d63d4" stroke-width="2.2" />
+            <text x="400" y="114" font-size="23" font-weight="700" fill="#161b2e">web</text>
+            <text x="400" y="144" font-size="18.5" font-weight="600" fill="#2952cc">Vite 6 / dist static</text>
+            <text x="400" y="174" font-size="17.5" fill="#475166">Serves SPA assets,</text>
+            <text x="400" y="198" font-size="17.5" fill="#475166">proxies /api to :4173</text>
+
+            <!-- api box -->
+            <rect x="764" y="76" width="254" height="162" rx="18" fill="#fbf0e5" stroke="#ae591f" stroke-width="2.2" />
+            <text x="786" y="114" font-size="23" font-weight="700" fill="#161b2e">api</text>
+            <text x="786" y="144" font-size="18.5" font-weight="600" fill="#a85016">Express 5 / Java 21</text>
+            <text x="786" y="174" font-size="17.5" fill="#475166">75 REST routes, cookies,</text>
+            <text x="786" y="198" font-size="17.5" fill="#475166">RBAC &amp; audit logs</text>
+
+            <!-- db box -->
+            <rect x="1146" y="76" width="212" height="162" rx="18" fill="#e3f4ec" stroke="#2e7b59" stroke-width="2.2" />
+            <text x="1168" y="114" font-size="23" font-weight="700" fill="#161b2e">db</text>
+            <text x="1168" y="144" font-size="18.5" font-weight="600" fill="#257352">SQLite 3 (WAL)</text>
+            <text x="1168" y="174" font-size="17.5" fill="#475166">19 tables, seeded</text>
+            <text x="1168" y="198" font-size="17.5" fill="#475166">defaults &amp; ACID</text>
+
+            <!-- uploads box -->
+            <rect x="764" y="354" width="254" height="98" rx="16" fill="#ffffff" stroke="#d9e0ec" stroke-width="2" />
+            <text x="786" y="392" font-size="21" font-weight="700" fill="#161b2e">uploads</text>
+            <text x="786" y="422" font-size="17" fill="#475166">public/images/uploads</text>
+
+            <!-- auth.sqlite box -->
+            <rect x="1146" y="354" width="212" height="98" rx="16" fill="#ffffff" stroke="#d9e0ec" stroke-width="2" />
+            <text x="1168" y="392" font-size="21" font-weight="700" fill="#161b2e">auth.sqlite</text>
+            <text x="1168" y="422" font-size="17" fill="#475166">backend/data/*.sqlite</text>
+          </svg>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 4 — INSIDE THE CODE
+      ========================================================== -->
+      <section class="slide" data-slide="4">
+        <div class="eyebrow" data-i18n="s4.eyebrow">INSIDE THE CODE</div>
+        <h2 class="slide-title" data-i18n="s4.title">Who does what: layers and folders</h2>
+
+        <div class="code-layout">
+          <!-- Frontend column -->
+          <div>
+            <div class="col-head"><span>Frontend ·</span> <span class="accent-blue">React 18</span></div>
+            <div class="layer-stack">
+              <div class="layer-box blue">
+                <div class="layer-name">src/frontend/pages/</div>
+                <div class="layer-sub" data-i18n="s4.f1">7 public views: Home, Rooms, Gallery, Compare, FAQ, Contact</div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer-box blue">
+                <div class="layer-name">src/admin-panel/ &amp; dashboard/</div>
+                <div class="layer-sub" data-i18n="s4.f2">12 ERP sections, floor map, KPI cards &amp; CRUD modals</div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer-box blue">
+                <div class="layer-name">modals/ + App.jsx state</div>
+                <div class="layer-sub" data-i18n="s4.f3">Shared booking, chat, auth &amp; profile modals + fetch sync</div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer-foot">JSON over /api/*</div>
+            </div>
+          </div>
+
+          <!-- Backend column -->
+          <div>
+            <div class="col-head"><span>Backend ·</span> <span class="accent-amber">Express 5 &amp; Java 21</span></div>
+            <div class="layer-stack">
+              <div class="layer-box amber">
+                <div class="layer-name">routes/ (auth, public, admin)</div>
+                <div class="layer-sub" data-i18n="s4.b1">HTTP routing, validation, RBAC guards &amp; audit hooks</div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer-box amber">
+                <div class="layer-name">utils/auth.js &amp; AuthService.java</div>
+                <div class="layer-sub" data-i18n="s4.b2">scrypt hashes, AES-256-GCM ciphers &amp; sliding cookies</div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer-box amber">
+                <div class="layer-name">db/database.js &amp; DormitoryDatabase</div>
+                <div class="layer-sub" data-i18n="s4.b3">19 SQLite tables, auto-migrations, seed data &amp; uploads</div>
+              </div>
+              <div class="layer-arrow">↓</div>
+              <div class="layer-foot">WAL SQLite + global JSON errors</div>
+            </div>
+          </div>
+
+          <!-- Repository map table -->
+          <div class="table-card">
+            <h3 data-i18n="s4.map">Repository map</h3>
+            <table class="clean-table">
+              <thead>
+                <tr>
+                  <th data-i18n="s4.th1">Folder</th>
+                  <th data-i18n="s4.th2">Job</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>src/frontend/</td>
+                  <td data-i18n="s4.r1">Student-facing pages, modals, data &amp; components</td>
+                </tr>
+                <tr>
+                  <td>src/admin-panel/</td>
+                  <td data-i18n="s4.r2">12-section ERP workspace, sidebar &amp; helpers</td>
+                </tr>
+                <tr>
+                  <td>src/dashboard/</td>
+                  <td data-i18n="s4.r3">KPI grid, interactive floor map &amp; task panels</td>
+                </tr>
+                <tr>
+                  <td>backend/</td>
+                  <td data-i18n="s4.r4">Express 5 API, SQLite WAL DB, seed &amp; dev runner</td>
+                </tr>
+                <tr>
+                  <td>backend-java/</td>
+                  <td data-i18n="s4.r5">Zero-framework Java 21 virtual-thread backend</td>
+                </tr>
+                <tr>
+                  <td>public/images/</td>
+                  <td data-i18n="s4.r6">Campus photography &amp; user-uploaded room media</td>
+                </tr>
+                <tr>
+                  <td>vite.config.js</td>
+                  <td data-i18n="s4.r7">Build pipeline &amp; /api proxy to localhost:4173</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 5 — ONE REQUEST, END TO END
+      ========================================================== -->
+      <section class="slide" data-slide="5">
+        <div class="eyebrow" data-i18n="s5.eyebrow">ONE REQUEST, END TO END</div>
+        <h2 class="slide-title" data-i18n="s5.title">What happens when a student books a room</h2>
+
+        <div class="grid-3x2">
+          <div class="step-card">
+            <div>
+              <div class="step-head">
+                <div class="step-num bg-blue">1</div>
+                <h3 data-i18n="s5.s1.t">Browser sends</h3>
+              </div>
+              <p class="step-body" data-i18n="s5.s1.d">BookingModal validates required fields, attaches the session cookie if logged in, and submits the room choice.</p>
+            </div>
+            <div><span class="code-pill">POST /api/bookings</span></div>
+          </div>
+
+          <div class="step-card">
+            <div>
+              <div class="step-head">
+                <div class="step-num bg-blue">2</div>
+                <h3 data-i18n="s5.s2.t">Vite / Express routes</h3>
+              </div>
+              <p class="step-body" data-i18n="s5.s2.d">In dev, Vite forwards /api/* to port 4173. Express parses JSON (up to 15 MB) and dispatches to publicRouter.</p>
+            </div>
+            <div><span class="code-pill">/api/* → publicRouter</span></div>
+          </div>
+
+          <div class="step-card">
+            <div>
+              <div class="step-head">
+                <div class="step-num bg-amber">3</div>
+                <h3 data-i18n="s5.s3.t">API validates first</h3>
+              </div>
+              <p class="step-body" data-i18n="s5.s3.d">Full name present? Phone ≥ 7 digits? Valid room inventory category found? Otherwise a clean JSON error returns.</p>
+            </div>
+            <div><span class="code-pill">else 400 · 404 · 413</span></div>
+          </div>
+
+          <div class="step-card">
+            <div>
+              <div class="step-head">
+                <div class="step-num bg-green">4</div>
+                <h3 data-i18n="s5.s4.t">Booking saved</h3>
+              </div>
+              <p class="step-body" data-i18n="s5.s4.d">database.js writes a pending row into bookings linked to the room type, preferred room #, and optional student account.</p>
+            </div>
+            <div><span class="code-pill">201 Created</span></div>
+          </div>
+
+          <div class="step-card">
+            <div>
+              <div class="step-head">
+                <div class="step-num bg-amber">5</div>
+                <h3 data-i18n="s5.s5.t">Chat thread opens</h3>
+              </div>
+              <p class="step-body" data-i18n="s5.s5.d">getOrCreateSupportChat creates a dedicated thread, posts a welcome reply, and increments unread_admin if notes exist.</p>
+            </div>
+            <div><span class="code-pill">support_chats + messages</span></div>
+          </div>
+
+          <div class="step-card">
+            <div>
+              <div class="step-head">
+                <div class="step-num bg-purple">6</div>
+                <h3 data-i18n="s5.s6.t">UI &amp; Admin sync</h3>
+              </div>
+              <p class="step-body" data-i18n="s5.s6.d">The chat session is cached in localStorage, public room stats reload, and the request appears live in the Admin ERP queue.</p>
+            </div>
+            <div><span class="code-pill">GET /api/rooms · /overview</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 6 — THE DATA MODEL
+      ========================================================== -->
+      <section class="slide" data-slide="6">
+        <div class="eyebrow" data-i18n="s6.eyebrow">THE DATA MODEL</div>
+        <h2 class="slide-title" data-i18n="s6.title">19 SQLite tables hold the entire dormitory</h2>
+        <p class="slide-lead" data-i18n="s6.lead">
+          Core booking, resident, room, and support chat tables connect cleanly; 14 more tables power CMS content, sessions, and audit logs.
+        </p>
+
+        <div class="er-wrap">
+          <svg viewBox="0 0 1392 430" width="1392" height="430" aria-label="Database Entity Relationship Diagram">
+            <defs>
+              <marker id="er-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M 0 1.2 L 8.5 5 L 0 8.8 z" fill="#7f8ba1" />
+              </marker>
+              <path id="er-flow" d="M 278 214 L 748 214" />
+              <path id="er-top-1" d="M 140 120 L 140 58 L 386 58" />
+              <path id="er-top-2" d="M 642 58 L 882 58 L 882 114" />
+              <path id="er-bot-1" d="M 140 310 L 140 366 L 386 366" />
+              <path id="er-right" d="M 1016 214 L 1116 214" />
+            </defs>
+
+            <!-- accounts -> bookings (top elbow) -->
+            <path d="M 140 120 L 140 58 L 386 58" fill="none" stroke="#7f8ba1" stroke-width="2.2" marker-end="url(#er-arrow)" />
+            <text x="256" y="46" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="16" fill="#475166">submits</text>
+
+            <!-- bookings -> dorm_rooms (top right elbow) -->
+            <path d="M 642 58 L 882 58 L 882 114" fill="none" stroke="#7f8ba1" stroke-width="2.2" marker-end="url(#er-arrow)" />
+            <text x="760" y="46" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="16" fill="#475166">approves to</text>
+
+            <!-- accounts -> dorm_rooms (center direct line via resident) -->
+            <line x1="278" y1="214" x2="748" y2="214" stroke="#7f8ba1" stroke-width="2.2" marker-end="url(#er-arrow)" />
+            <text x="514" y="199" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="16" fill="#475166">assigned as resident</text>
+
+            <!-- Animated glowing dots -->
+            <circle r="13" fill="#2952cc" opacity="0.2">
+              <animateMotion dur="3.2s" begin="-1.1s" repeatCount="indefinite"><mpath href="#er-flow" /></animateMotion>
+            </circle>
+            <circle r="7" fill="#2952cc">
+              <animateMotion dur="3.2s" begin="-1.1s" repeatCount="indefinite"><mpath href="#er-flow" /></animateMotion>
+            </circle>
+
+            <circle r="6" fill="#2952cc" opacity="0.85">
+              <animateMotion dur="3.4s" begin="-2.0s" repeatCount="indefinite"><mpath href="#er-top-1" /></animateMotion>
+            </circle>
+            <circle r="6" fill="#a85016" opacity="0.85">
+              <animateMotion dur="3.4s" begin="-0.9s" repeatCount="indefinite"><mpath href="#er-top-2" /></animateMotion>
+            </circle>
+            <circle r="6" fill="#5b3ec4" opacity="0.85">
+              <animateMotion dur="3.6s" begin="-1.5s" repeatCount="indefinite"><mpath href="#er-bot-1" /></animateMotion>
+            </circle>
+            <circle r="6.5" fill="#257352">
+              <animateMotion dur="2.2s" begin="-0.8s" repeatCount="indefinite"><mpath href="#er-right" /></animateMotion>
+            </circle>
+
+            <!-- accounts -> support_chats (bottom elbow) -->
+            <path d="M 140 310 L 140 366 L 386 366" fill="none" stroke="#7f8ba1" stroke-width="2.2" marker-end="url(#er-arrow)" />
+            <text x="256" y="394" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="16" fill="#475166">chats via</text>
+
+            <!-- support_chats -> dorm_rooms/booking ref -->
+            <path d="M 642 366 L 882 366 L 882 316" fill="none" stroke="#7f8ba1" stroke-width="2.2" marker-end="url(#er-arrow)" />
+            <text x="760" y="394" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="16" fill="#475166">about room</text>
+
+            <!-- dorm_rooms -> room_residents (right) -->
+            <line x1="1016" y1="214" x2="1116" y2="214" stroke="#7f8ba1" stroke-width="2.2" marker-end="url(#er-arrow)" />
+            <text x="1066" y="199" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="16" fill="#475166">1 – 6</text>
+
+            <!-- accounts card -->
+            <rect x="6" y="120" width="272" height="190" rx="18" fill="#eaf0ff" stroke="#3d63d4" stroke-width="2.2" />
+            <text x="28" y="158" font-size="23" font-weight="700" fill="#161b2e">accounts</text>
+            <text x="28" y="188" font-size="17" fill="#3a455a">Students &amp; AdminTPU,</text>
+            <text x="28" y="212" font-size="17" fill="#3a455a">unique login, role.</text>
+            <text x="28" y="242" font-size="17" fill="#3a455a">scrypt hash + AES-GCM</text>
+            <text x="28" y="266" font-size="17" fill="#3a455a">&amp; persistent sessions.</text>
+
+            <!-- bookings card -->
+            <rect x="392" y="4" width="250" height="136" rx="16" fill="#ffffff" stroke="#d9e0ec" stroke-width="2" />
+            <text x="414" y="40" font-size="22" font-weight="700" fill="#161b2e">bookings</text>
+            <text x="414" y="68" font-size="17" fill="#475166">Pending, approved or</text>
+            <text x="414" y="92" font-size="17" fill="#475166">rejected requests with</text>
+            <text x="414" y="116" font-size="17" fill="#475166">preferred room #.</text>
+
+            <!-- support_chats card -->
+            <rect x="392" y="294" width="250" height="130" rx="16" fill="#ffffff" stroke="#d9e0ec" stroke-width="2" />
+            <text x="414" y="330" font-size="22" font-weight="700" fill="#161b2e">support_chats</text>
+            <text x="414" y="358" font-size="17" fill="#475166">Threads + messages,</text>
+            <text x="414" y="382" font-size="17" fill="#475166">unread admin &amp; student</text>
+            <text x="414" y="406" font-size="17" fill="#475166">badges per booking.</text>
+
+            <!-- dorm_rooms + room_inventory card -->
+            <rect x="754" y="120" width="262" height="190" rx="18" fill="#fbf0e5" stroke="#ae591f" stroke-width="2.2" />
+            <text x="776" y="158" font-size="23" font-weight="700" fill="#161b2e">dorm_rooms</text>
+            <text x="776" y="188" font-size="17" fill="#3a455a">Room # (201–404), floor,</text>
+            <text x="776" y="212" font-size="17" fill="#3a455a">capacity, status, price.</text>
+            <text x="776" y="242" font-size="17" fill="#3a455a">Backed by room_inventory</text>
+            <text x="776" y="266" font-size="17" fill="#3a455a">categories &amp; galleries.</text>
+
+            <!-- room_residents card -->
+            <rect x="1122" y="120" width="264" height="190" rx="18" fill="#e3f4ec" stroke="#2e7b59" stroke-width="2.2" />
+            <text x="1144" y="158" font-size="23" font-weight="700" fill="#161b2e">room_residents</text>
+            <text x="1144" y="188" font-size="17" fill="#3a455a">Placed student, faculty,</text>
+            <text x="1144" y="212" font-size="17" fill="#3a455a">phone &amp; move-in date.</text>
+            <text x="1144" y="242" font-size="17" fill="#3a455a">Payment status: paid,</text>
+            <text x="1144" y="266" font-size="17" fill="#3a455a">pending, or overdue.</text>
+          </svg>
+
+          <div class="er-footer-strip">
+            <strong data-i18n="s6.more">Plus 14 operational &amp; CMS tables:</strong>
+            <span class="code-pill">room_inventory</span>
+            <span class="code-pill">support_chat_messages</span>
+            <span class="code-pill">maintenance_requests</span>
+            <span class="code-pill">contact_messages</span>
+            <span class="code-pill">dorm_announcements</span>
+            <span class="code-pill">homepage_settings</span>
+            <span class="code-pill">gallery_categories</span>
+            <span class="code-pill">gallery_photos</span>
+            <span class="code-pill">facilities</span>
+            <span class="code-pill">faq_items</span>
+            <span class="code-pill">site_bottom_texts</span>
+            <span class="code-pill">admin_activity_logs</span>
+            <span class="code-pill">sessions</span>
+            <span class="code-pill">authorized_students</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 7 — THE API
+      ========================================================== -->
+      <section class="slide" data-slide="7">
+        <div class="eyebrow" data-i18n="s7.eyebrow">THE API</div>
+        <h2 class="slide-title" data-i18n="s7.title">75 endpoints, one predictable contract</h2>
+        <p class="slide-lead" data-i18n="s7.lead">
+          Every endpoint lives under /api and returns structured JSON. The same contract runs on both Express 5 and Java 21.
+        </p>
+
+        <div class="api-layout">
+          <div class="table-card">
+            <table class="clean-table">
+              <thead>
+                <tr>
+                  <th data-i18n="s7.th1">Area</th>
+                  <th data-i18n="s7.th2">Paths</th>
+                  <th data-i18n="s7.th3">Who may call</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Auth (5)</td>
+                  <td class="mono" style="font-size:15.5px">/auth/register, /login, /logout, /me, /profile</td>
+                  <td data-i18n="s7.w1">Anyone / Logged in</td>
+                </tr>
+                <tr>
+                  <td>Public (7)</td>
+                  <td class="mono" style="font-size:15.5px">/rooms, /homepage, /gallery, /faqs, /bookings, /contact</td>
+                  <td data-i18n="s7.w2">Anyone</td>
+                </tr>
+                <tr>
+                  <td>Portal &amp; Chat (4)</td>
+                  <td class="mono" style="font-size:15.5px">/student/portal, /maintenance, /support/chat, /message</td>
+                  <td data-i18n="s7.w3">Students</td>
+                </tr>
+                <tr>
+                  <td>ERP Core (19)</td>
+                  <td class="mono" style="font-size:15.5px">/admin/overview, /bookings, /rooms, /dorm-rooms, /residents</td>
+                  <td data-i18n="s7.w4">Admin only</td>
+                </tr>
+                <tr>
+                  <td>Finance &amp; Ops (9)</td>
+                  <td class="mono" style="font-size:15.5px">/admin/payments/bulk, /maintenance, /announcements, /messages</td>
+                  <td data-i18n="s7.w4">Admin only</td>
+                </tr>
+                <tr>
+                  <td>Support Chats (8)</td>
+                  <td class="mono" style="font-size:15.5px">/admin/chats, /:id/reply, /:id/read, /messages/:msgId</td>
+                  <td data-i18n="s7.w4">Admin only</td>
+                </tr>
+                <tr>
+                  <td>CMS &amp; Media (17)</td>
+                  <td class="mono" style="font-size:15.5px">/admin/homepage, /facilities, /faqs, /gallery, /upload-image</td>
+                  <td data-i18n="s7.w4">Admin only</td>
+                </tr>
+                <tr>
+                  <td>Audit &amp; DB (6)</td>
+                  <td class="mono" style="font-size:15.5px">/admin/activity-logs, /accounts, /database/:table/rows</td>
+                  <td data-i18n="s7.w4">Admin only</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card" style="padding: 30px 32px;">
+            <h3 style="font-size: 25px; font-weight: 700; margin-bottom: 18px;" data-i18n="s7.rulesTitle">Same rules everywhere</h3>
+            <ul class="rules-list">
+              <li data-i18n="s7.r1">JSON bodies up to 15 MB for base64 room, hero &amp; gallery photo uploads.</li>
+              <li data-i18n="s7.r2">Passwords hashed with salted 64-byte scrypt and timingSafeEqual checks.</li>
+              <li data-i18n="s7.r3">HttpOnly, SameSite=Lax cookie lasts 7 days with automatic sliding refresh.</li>
+              <li data-i18n="s7.r4">All /api/admin/* routes pass through requireAdmin (401 or 403 otherwise).</li>
+              <li data-i18n="s7.r5">Positive-integer validator rejects malformed :id, :chatId &amp; :msgId params.</li>
+              <li data-i18n="s7.r6">Every admin create, edit, delete &amp; contact writes to admin_activity_logs.</li>
+              <li data-i18n="s7.r7">Global error handler maps SQLite constraints &amp; bad JSON to clean codes.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 8 — THE BROWSER APP
+      ========================================================== -->
+      <section class="slide" data-slide="8">
+        <div class="eyebrow" data-i18n="s8.eyebrow">THE BROWSER APP</div>
+        <h2 class="slide-title" data-i18n="s8.title">Inside the React app</h2>
+
+        <div class="browser-layout">
+          <div class="screens-card">
+            <h3 data-i18n="s8.leftTitle">Eight views &amp; 12 ERP tabs</h3>
+
+            <div>
+              <div class="route-group-label" data-i18n="s8.g1">Public views (hash router)</div>
+              <div class="pill-wrap">
+                <span class="code-pill">#home</span>
+                <span class="code-pill">#rooms</span>
+                <span class="code-pill">#facilities</span>
+                <span class="code-pill">#gallery</span>
+                <span class="code-pill">#compare</span>
+                <span class="code-pill">#faq</span>
+                <span class="code-pill">#contact</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="route-group-label" data-i18n="s8.g2">Admin ERP (#admin · 12 modules)</div>
+              <div class="pill-wrap">
+                <span class="code-pill">Dashboard</span>
+                <span class="code-pill">Activity Log</span>
+                <span class="code-pill">Bookings</span>
+                <span class="code-pill">Chats</span>
+                <span class="code-pill">Rooms</span>
+                <span class="code-pill">Residents</span>
+                <span class="code-pill">Payments</span>
+                <span class="code-pill">Maintenance</span>
+                <span class="code-pill">Community</span>
+                <span class="code-pill">Gallery</span>
+                <span class="code-pill">Site CMS</span>
+                <span class="code-pill">DB Studio</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="route-group-label" data-i18n="s8.g3">Interactive modals</div>
+              <div class="pill-wrap">
+                <span class="code-pill">Booking</span>
+                <span class="code-pill">Support Chat</span>
+                <span class="code-pill">Room Details</span>
+                <span class="code-pill">Auth &amp; Profile</span>
+                <span class="code-pill">Lightbox</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="browser-grid-2x2">
+            <div class="feature-card">
+              <div class="icon-box icon-blue">
+                <svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </div>
+              <div class="card-title" data-i18n="s8.c1.t">Role-based route guard</div>
+              <div class="card-desc" data-i18n="s8.c1.d">Opening #admin verifies /api/auth/me first. Unauthenticated visitors are sent straight to the login modal; expired sessions reset cleanly.</div>
+            </div>
+
+            <div class="feature-card">
+              <div class="icon-box icon-amber">
+                <svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              </div>
+              <div class="card-title" data-i18n="s8.c2.t">Single sync helper</div>
+              <div class="card-desc" data-i18n="s8.c2.d">AdminPanelView wraps all mutations in runAdminRequest: handles 401 expiry, shows toast feedback, and refreshes overview + public rooms.</div>
+            </div>
+
+            <div class="feature-card">
+              <div class="icon-box icon-green">
+                <svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+              </div>
+              <div class="card-title" data-i18n="s8.c3.t">Live floor map &amp; KPIs</div>
+              <div class="card-desc" data-i18n="s8.c3.d">DashboardFloorMap groups rooms by floor (2nd–4th), computes real-time occupancy percentages, expected vs collected UZS revenue, and overdue counts.</div>
+            </div>
+
+            <div class="feature-card">
+              <div class="icon-box icon-purple">
+                <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h8"/><path d="M8 14h5"/></svg>
+              </div>
+              <div class="card-title" data-i18n="s8.c4.t">Floating chat &amp; quick booking</div>
+              <div class="card-desc" data-i18n="s8.c4.d">Always-accessible floating buttons let any student open Support Chat (persisted in localStorage) or launch the booking flow from any screen.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 9 — DELIVERY & RUNTIME
+      ========================================================== -->
+      <section class="slide" data-slide="9">
+        <div class="eyebrow" data-i18n="s9.eyebrow">DELIVERY &amp; RUNTIME</div>
+        <h2 class="slide-title" data-i18n="s9.title">From local dev to dual-runtime production</h2>
+
+        <div class="delivery-cards">
+          <div class="del-card blue">
+            <div class="step-num bg-blue">1</div>
+            <h3 data-i18n="s9.d1.t">Dev runner</h3>
+            <p data-i18n="s9.d1.d">npm run dev launches backend/index.js (--watch) alongside Vite dev servers on 5173 &amp; 5174.</p>
+          </div>
+
+          <div class="del-card amber">
+            <div class="step-num bg-amber">2</div>
+            <h3 data-i18n="s9.d2.t">Vite bundle</h3>
+            <p data-i18n="s9.d2.d">npm run build compiles React 18, Lucide icons, GSAP &amp; styles into static assets in dist/.</p>
+          </div>
+
+          <div class="del-card purple">
+            <div class="step-num bg-purple">3</div>
+            <h3 data-i18n="s9.d3.t">Auto-migrate</h3>
+            <p data-i18n="s9.d3.d">initDatabase() enables WAL mode, creates 19 tables, applies column migrations &amp; seeds defaults.</p>
+          </div>
+
+          <div class="del-card blue">
+            <div class="step-num bg-blue">4</div>
+            <h3 data-i18n="s9.d4.t">Dual runtime</h3>
+            <p data-i18n="s9.d4.d">Serve SPA + API with Node (npm start) or compile &amp; run Java 21 virtual threads on :4173.</p>
+          </div>
+
+          <div class="del-card green">
+            <div class="step-num bg-green">5</div>
+            <h3 data-i18n="s9.d5.t">Live ops &amp; DB</h3>
+            <p data-i18n="s9.d5.d">Admins manage content, upload media into public/ + dist/, and sync/inspect tables live.</p>
+          </div>
+        </div>
+
+        <svg class="progress-track" viewBox="0 0 1392 28" aria-hidden="true">
+          <line x1="20" y1="14" x2="1372" y2="14" stroke="#cbd3e2" stroke-width="3.5" stroke-linecap="round" />
+          <circle cy="14" r="14" fill="#2952cc" opacity="0.22">
+            <animate attributeName="cx" values="60;1332;60" dur="8s" begin="-2.2s" repeatCount="indefinite" />
+          </circle>
+          <circle cy="14" r="8.5" fill="#2952cc">
+            <animate attributeName="cx" values="60;1332;60" dur="8s" begin="-2.2s" repeatCount="indefinite" />
+          </circle>
+        </svg>
+
+        <div class="deploy-subhead" data-i18n="s9.sub">Inside startup, on the server</div>
+        <div class="pill-chain">
+          <span class="chain-pill" data-i18n="s9.p1">Open SQLite WAL</span>
+          <span class="chain-arrow">→</span>
+          <span class="chain-pill" data-i18n="s9.p2">Create 19 tables</span>
+          <span class="chain-arrow">→</span>
+          <span class="chain-pill" data-i18n="s9.p3">ALTER migrations</span>
+          <span class="chain-arrow">→</span>
+          <span class="chain-pill" data-i18n="s9.p4">Seed rooms &amp; CMS</span>
+          <span class="chain-arrow">→</span>
+          <span class="chain-pill" data-i18n="s9.p5">Ensure AdminTPU</span>
+          <span class="chain-arrow">→</span>
+          <span class="chain-pill" data-i18n="s9.p6">Serve /api + dist/</span>
+        </div>
+
+        <div>
+          <div class="callout-amber" data-i18n="s9.callout">
+            Want JVM instead of Node? Run ./backend-java/run-java.sh to launch the Java 21 backend on the exact same port 4173.
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 10 — SAFETY NETS
+      ========================================================== -->
+      <section class="slide" data-slide="10">
+        <div class="eyebrow" data-i18n="s10.eyebrow">SAFETY NETS</div>
+        <h2 class="slide-title" data-i18n="s10.title">Where the data lives, and what protects it</h2>
+
+        <div class="grid-3x2">
+          <div class="feature-card">
+            <div class="icon-box icon-green">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s10.c1.t">SQLite WAL + busy timeout</div>
+            <div class="card-desc" data-i18n="s10.c1.d">auth.sqlite runs in Write-Ahead Logging mode with a 5-second busy timeout, allowing concurrent reads during writes safely.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-blue">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s10.c2.t">scrypt + AES-256-GCM</div>
+            <div class="card-desc" data-i18n="s10.c2.d">User passwords are salted and hashed with 64-byte scrypt and checked via timingSafeEqual; sensitive fields use AES-256-GCM.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-green">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s10.c3.t">DB-backed 7-day sessions</div>
+            <div class="card-desc" data-i18n="s10.c3.d">Tokens survive server restarts in the sessions table, expire automatically, and travel only in HttpOnly, SameSite=Lax cookies.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-amber">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s10.c4.t">Strict Admin RBAC</div>
+            <div class="card-desc" data-i18n="s10.c4.d">Every /api/admin/* route verifies both active session and role === 'admin' + verified === 1 before touching any record.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-purple">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s10.c5.t">Full Audit Activity Log</div>
+            <div class="card-desc" data-i18n="s10.c5.d">Every admin create, update, delete, and client contact call logs actor, timestamp, section, and summary to admin_activity_logs.</div>
+          </div>
+
+          <div class="feature-card">
+            <div class="icon-box icon-blue">
+              <svg viewBox="0 0 24 24" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            </div>
+            <div class="card-title" data-i18n="s10.c6.t">Input &amp; Crash Shields</div>
+            <div class="card-desc" data-i18n="s10.c6.d">Positive-integer param validators, 15 MB payload limit, image extension whitelisting, and unhandledRejection guard keep API alive.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 11 — HOW IT WAS BUILT
+      ========================================================== -->
+      <section class="slide" data-slide="11">
+        <div class="eyebrow" data-i18n="s11.eyebrow">HOW IT WAS BUILT</div>
+        <h2 class="slide-title" data-i18n="s11.title">An iterative full-stack loop, one module at a time</h2>
+
+        <div class="built-layout">
+          <div>
+            <div class="built-left-label" data-i18n="s11.leftHead">Architectural principles</div>
+            <div class="built-stack">
+              <div class="built-card">
+                <h3 data-i18n="s11.c1.t">Clean module boundaries</h3>
+                <p data-i18n="s11.c1.d">Student frontend, 12-tab Admin ERP, Dashboard widgets, and Backend APIs live in dedicated folders.</p>
+              </div>
+              <div class="built-card">
+                <h3 data-i18n="s11.c2.t">Zero-downtime auto-schema</h3>
+                <p data-i18n="s11.c2.d">Every new feature adds idempotent CREATE/ALTER checks and safe seed defaults on startup.</p>
+              </div>
+              <div class="built-card">
+                <h3 data-i18n="s11.c3.t">Dual-backend parity</h3>
+                <p data-i18n="s11.c3.d">Both Express 5 (Node.js) and Java 21 HttpServer mirror the same routes, cookies, and data model.</p>
+              </div>
+            </div>
+            <p class="built-footnote" data-i18n="s11.foot">
+              Every module ships end-to-end: SQLite table → API CRUD → Admin ERP tab → Public UI sync.
+            </p>
+          </div>
+
+          <div class="loop-wrap">
+            <svg viewBox="0 0 820 560" width="820" height="560" aria-label="8-step development loop">
+              <defs>
+                <path id="loop-orbit" d="M 410 74 A 276 206 0 1 1 409.9 74 Z" />
+              </defs>
+
+              <!-- Dashed orbit -->
+              <ellipse cx="410" cy="280" rx="276" ry="206" class="dash-animated" fill="none" stroke="#c0c8d8" stroke-width="3" stroke-dasharray="7 8" />
+
+              <!-- Center text -->
+              <text x="410" y="250" text-anchor="middle" font-size="25" font-weight="700" fill="#161b2e" data-i18n-svg="s11.center1">One module = schema +</text>
+              <text x="410" y="282" text-anchor="middle" font-size="25" font-weight="700" fill="#161b2e" data-i18n-svg="s11.center2">API + ERP + UI</text>
+              <text x="410" y="320" text-anchor="middle" font-size="17.5" fill="#475166" data-i18n-svg="s11.center3">New requirement? Start cleanly</text>
+              <text x="410" y="344" text-anchor="middle" font-size="17.5" fill="#475166" data-i18n-svg="s11.center4">at step 1.</text>
+
+              <!-- 1 Top -->
+              <rect x="304" y="34" width="212" height="76" rx="14" fill="#fbf0e5" stroke="#161b2e" stroke-width="1.8" />
+              <text x="410" y="66" text-anchor="middle" font-size="18.5" font-weight="700" fill="#161b2e" data-i18n-svg="s11.n1">1 · Define module</text>
+              <text x="410" y="92" text-anchor="middle" font-size="17" fill="#a85016" data-i18n-svg="s11.s1">Product spec</text>
+
+              <!-- 2 Top-Right -->
+              <rect x="550" y="106" width="212" height="76" rx="14" fill="#eaf0ff" stroke="#161b2e" stroke-width="1.8" />
+              <text x="656" y="138" text-anchor="middle" font-size="18.5" font-weight="700" fill="#161b2e" data-i18n-svg="s11.n2">2 · SQLite schema</text>
+              <text x="656" y="164" text-anchor="middle" font-size="17" fill="#2952cc">database.js</text>
+
+              <!-- 3 Right -->
+              <rect x="598" y="242" width="212" height="76" rx="14" fill="#efeafd" stroke="#6c4ec9" stroke-width="1.8" />
+              <text x="704" y="274" text-anchor="middle" font-size="18.5" font-weight="700" fill="#161b2e" data-i18n-svg="s11.n3">3 · Express route</text>
+              <text x="704" y="300" text-anchor="middle" font-size="17" fill="#5b3ec4">routes/*.js</text>
+
+              <!-- 4 Bottom-Right -->
+              <rect x="550" y="378" width="212" height="76" rx="14" fill="#eaf0ff" stroke="#161b2e" stroke-width="1.8" />
+              <text x="656" y="410" text-anchor="middle" font-size="18.5" font-weight="700" fill="#161b2e" data-i18n-svg="s11.n4">4 · Java 21 parity</text>
+              <text x="656" y="436" text-anchor="middle" font-size="17" fill="#2952cc">backend-java</text>
+
+              <!-- 5 Bottom -->
+              <rect x="304" y="446" width="212" height="76" rx="14" fill="#eaf0ff" stroke="#161b2e" stroke-width="1.8" />
+              <text x="410" y="478" text-anchor="middle" font-size="18.5" font-weight="700" fill="#161b2e" data-i18n-svg="s11.n5">5 · Admin ERP UI</text>
+              <text x="410" y="504" text-anchor="middle" font-size="17" fill="#2952cc">admin-panel/</text>
+
+              <!-- 6 Bottom-Left -->
+              <rect x="58" y="378" width="212" height="76" rx="14" fill="#eaf0ff" stroke="#161b2e" stroke-width="1.8" />
+              <text x="164" y="410" text-anchor="middle" font-size="18.5" font-weight="700" fill="#161b2e" data-i18n-svg="s11.n6">6 · Public pages</text>
+              <text x="164" y="436" text-anchor="middle" font-size="17" fill="#2952cc">frontend/</text>
+
+              <!-- 7 Left -->
+              <rect x="10" y="242" width="212" height="76" rx="14" fill="#efeafd" stroke="#6c4ec9" stroke-width="1.8" />
+              <text x="116" y="274" text-anchor="middle" font-size="18.5" font-weight="700" fill="#161b2e" data-i18n-svg="s11.n7">7 · Audit &amp; seed</text>
+              <text x="116" y="300" text-anchor="middle" font-size="17" fill="#5b3ec4" data-i18n-svg="s11.s7">Logs + defaults</text>
+
+              <!-- 8 Top-Left -->
+              <rect x="58" y="106" width="212" height="76" rx="14" fill="#e3f4ec" stroke="#2e7b59" stroke-width="1.8" />
+              <text x="164" y="138" text-anchor="middle" font-size="18.5" font-weight="700" fill="#161b2e" data-i18n-svg="s11.n8">8 · Build &amp; ship</text>
+              <text x="164" y="164" text-anchor="middle" font-size="17" fill="#257352">Vite + commit</text>
+
+              <!-- Moving blue dot + soft halo orbiting continuously on top -->
+              <circle r="15" fill="#2952cc" opacity="0.22">
+                <animateMotion dur="9s" begin="-5.3s" repeatCount="indefinite">
+                  <mpath href="#loop-orbit" />
+                </animateMotion>
+              </circle>
+              <circle r="8.5" fill="#2952cc">
+                <animateMotion dur="9s" begin="-5.3s" repeatCount="indefinite">
+                  <mpath href="#loop-orbit" />
+                </animateMotion>
+              </circle>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========================================================
+           SLIDE 12 — THE JOURNEY
+      ========================================================== -->
+      <section class="slide" data-slide="12">
+        <div class="eyebrow" data-i18n="s12.eyebrow">THE JOURNEY</div>
+        <h2 class="slide-title" data-i18n="s12.title">Seven phases, from 3D landing to v1.0.0 ERP</h2>
+
+        <div class="timeline-wrap">
+          <svg style="position:absolute;top:0;left:0;width:100%;height:30px;z-index:0;overflow:visible;" viewBox="0 0 1392 30" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="98" y1="15" x2="1294" y2="15" stroke="#cbd3e2" stroke-width="3.2" />
+            <circle cy="15" r="7" fill="#2952cc" opacity="0.85">
+              <animate attributeName="cx" values="98;1294" dur="7s" begin="-1.6s" repeatCount="indefinite" />
+            </circle>
+          </svg>
+          <div class="timeline-grid">
+            <div class="phase-node">
+              <div class="phase-dot"></div>
+              <div class="phase-label">Phase 0</div>
+              <div class="phase-name" data-i18n="s12.p0">3D Tour &amp; Landing UI</div>
+              <span class="ver-pill ver-amber">v0.1.0</span>
+            </div>
+
+            <div class="phase-node">
+              <div class="phase-dot"></div>
+              <div class="phase-label">Phase 1</div>
+              <div class="phase-name" data-i18n="s12.p1">Modular Split &amp; Core ERP</div>
+              <span class="ver-pill ver-blue">v0.3.0</span>
+            </div>
+
+            <div class="phase-node">
+              <div class="phase-dot"></div>
+              <div class="phase-label">Phase 2</div>
+              <div class="phase-name" data-i18n="s12.p2">Room Upload &amp; Pricing</div>
+              <span class="ver-pill ver-blue">v0.5.0</span>
+            </div>
+
+            <div class="phase-node">
+              <div class="phase-dot"></div>
+              <div class="phase-label">Phase 3</div>
+              <div class="phase-name" data-i18n="s12.p3">Homepage &amp; FAQ CMS</div>
+              <span class="ver-pill ver-blue">v0.7.0</span>
+            </div>
+
+            <div class="phase-node">
+              <div class="phase-dot"></div>
+              <div class="phase-label">Phase 4</div>
+              <div class="phase-name" data-i18n="s12.p4">Support Chat &amp; Java 21</div>
+              <span class="ver-pill ver-blue">v0.8.0</span>
+            </div>
+
+            <div class="phase-node">
+              <div class="phase-dot"></div>
+              <div class="phase-label">Phase 5</div>
+              <div class="phase-name" data-i18n="s12.p5">Dynamic Gallery &amp; Texts</div>
+              <span class="ver-pill ver-blue">v0.9.0</span>
+            </div>
+
+            <div class="phase-node">
+              <div class="phase-dot final"></div>
+              <div class="phase-label final">Phase 6</div>
+              <div class="phase-name" data-i18n="s12.p6">Audit Log &amp; DB Studio</div>
+              <span class="ver-pill ver-green">v1.0.0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-num blue">75</div>
+            <div class="stat-desc" data-i18n="s12.st1">REST API endpoints: 5 auth, 11 public &amp; student portal, 59 admin ERP</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-num amber">19</div>
+            <div class="stat-desc" data-i18n="s12.st2">SQLite tables with WAL mode, auto-migrations &amp; seeded defaults</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-num green">60</div>
+            <div class="stat-desc" data-i18n="s12.st3">source files across React 18 UI, Express 5 &amp; Java 21 backends</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-num purple">12</div>
+            <div class="stat-desc" data-i18n="s12.st4">Admin ERP sections from floor maps &amp; chats to live SQLite DB studio</div>
+          </div>
+        </div>
+
+        <p class="journey-foot" data-i18n="s12.foot">
+          One codebase: responsive student portal, real-time chat, full dormitory ERP, and dual Node.js / Java 21 runtimes.
+        </p>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Minimal Presentation HUD -->
+  <div class="hud" id="hud">
+    <button id="btn-prev" title="Previous (←)">←</button>
+    <span class="hud-counter" id="counter">1 / 12</span>
+    <button id="btn-next" title="Next (→)">→</button>
+    <div class="hud-sep"></div>
+    <button id="btn-en" class="active-lang" title="English">EN</button>
+    <button id="btn-uz" title="O‘zbekcha">UZ</button>
+    <div class="hud-sep"></div>
+    <button id="btn-grid" title="All slides (G)">Grid</button>
+    <button id="btn-fs" title="Fullscreen (F)">Full</button>
+    <button id="btn-print" title="Print / Save PDF">PDF</button>
+  </div>
+
+  <!-- Overview Grid -->
+  <div class="overview-overlay" id="overview">
+    <div class="overview-head">
+      <h2>TPU Smart Dormitory — 12 Slides</h2>
+      <button class="overview-close" id="overview-close">Close (Esc)</button>
+    </div>
+    <div class="overview-grid" id="overview-grid"></div>
+  </div>
+
+  <script>
+    const translations = {
+      uz: {
+        "s1.eyebrow": "LOYIHA SHARHI · V1.0.0",
+        "s1.title": "Smart Dormitory",
+        "s1.lead": "Tashkent Perfect University uchun to‘liq funksional talabalar yotoqxona portali va ERP tizimi. Qanday ishlaydi, qismlari qanday bog‘langan va qanday qurilgan.",
+        "s1.pill": "local · localhost:4173 · Node 22 / Java 21",
+
+        "s2.eyebrow": "MAHSULOT IMKONIYATLARI",
+        "s2.title": "Talabalar va adminlar nima qila oladi",
+        "s2.lead": "Xona tanlash, onlayn bron qilish, jonli chat va 12 bo‘limli yotoqxona ERP boshqaruvini birlashtirgan yagona platforma.",
+        "s2.c1.t": "Akkaunt va Talaba Kabineti",
+        "s2.c1.d": "Kurs va telefon bilan ro‘yxatdan o‘tish, avatar yuklash, biriktirilgan xonani ko‘rish va 7 kunlik doimiy sessiya.",
+        "s2.c2.t": "Xonalar Katalogi va Bron",
+        "s2.c2.d": "2, 4 va 6 kishilik xonalarni solishtirish, bo‘sh o‘rinlarni ko‘rish, xona raqamini tanlash va onlayn ariza yuborish.",
+        "s2.c3.t": "Jonli Support Chat",
+        "s2.c3.d": "Har bir bron arizasi avtomatik chat ochadi; talaba va ma’muriyat real vaqtda xabar almashadi.",
+        "s2.c4.t": "12 Bo‘limli Admin ERP",
+        "s2.c4.d": "Qavat xaritasi, arizalarni tasdiqlash, oylik to‘lovlar, texnik xizmat so‘rovlari va ishlar jurnalini boshqarish.",
+        "s2.c5.t": "Dinamik CMS va Galereya",
+        "s2.c5.d": "Bosh sahifa matnlari, statistika, hero rasmlar, galereya bo‘limlari, qulayliklar va FAQ ni kodsiz tahrirlash.",
+        "s2.c6.t": "DB Studio va Ikki Backend",
+        "s2.c6.d": "Admin paneldan 19 ta SQLite jadvalini boshqarish hamda Express 5 va Java 21 serverlarida birdek ishlatish.",
+
+        "s3.eyebrow": "ARXITEKTURA",
+        "s3.title": "Umumiy manzara: bitta SPA, ikki runtime, bitta baza",
+        "s3.lead": "Barcha API so‘rovlari 4173-port orqali kiradi (dev da Vite proksi qiladi, prod da bevosita xizmat qiladi). SQLite tashqaridan yopiq.",
+
+        "s4.eyebrow": "KOD TUZILMASI",
+        "s4.title": "Kim nima qiladi: qatlamlar va papkalar",
+        "s4.f1": "7 ta ochiq sahifa: Bosh sahifa, Xonalar, Galereya, Taqqoslash, FAQ, Aloqa",
+        "s4.f2": "12 ta ERP bo‘limi, qavat xaritasi, KPI kartalar va CRUD modallar",
+        "s4.f3": "Bron, chat, auth va profil modallari hamda fetch sinxronizatsiyasi",
+        "s4.b1": "HTTP marshrutlar, validatsiya, RBAC himoyasi va audit jurnali",
+        "s4.b2": "scrypt xeshlar, AES-256-GCM shifrlash va 7 kunlik cookie sessiya",
+        "s4.b3": "19 ta SQLite jadvali, avto-migratsiyalar, boshlang‘ich ma’lumotlar",
+        "s4.map": "Repozitoriy xaritasi",
+        "s4.th1": "Papka",
+        "s4.th2": "Vazifasi",
+        "s4.r1": "Talabalar uchun sahifalar, modallar, ma’lumotlar va komponentlar",
+        "s4.r2": "12 bo‘limli ERP boshqaruv paneli, sidebar va yordamchi funksiyalar",
+        "s4.r3": "KPI ko‘rsatkichlar, interaktiv qavat xaritasi va vazifalar paneli",
+        "s4.r4": "Express 5 API, SQLite WAL baza, seed va dev ishga tushirgich",
+        "s4.r5": "Freymvorksiz Java 21 virtual-thread backend serveri",
+        "s4.r6": "Kampus fotolari va yuklangan xona/galereya rasmlari",
+        "s4.r7": "Build sozlamalari va /api ni localhost:4173 ga proksi qilish",
+
+        "s5.eyebrow": "BITTA SO‘ROV — BOSHIDAN OXIRIGACHA",
+        "s5.title": "Talaba xonani bron qilganda nima sodir bo‘ladi",
+        "s5.s1.t": "Brauzer yuboradi",
+        "s5.s1.d": "BookingModal maydonlarni tekshiradi, kirilgan bo‘lsa sessiya cookie ni qo‘shadi va xona arizasini yuboradi.",
+        "s5.s2.t": "Vite / Express yo‘naltiradi",
+        "s5.s2.d": "Dev rejimda Vite /api/* ni 4173 ga uzatadi. Express JSON ni (15 MB gacha) o‘qib publicRouter ga beradi.",
+        "s5.s3.t": "API avval tekshiradi",
+        "s5.s3.d": "Ism-familiya kiritilganmi? Telefon ≥ 7 raqammi? Xona turi bazada bormi? Aks holda aniq JSON xato qaytadi.",
+        "s5.s4.t": "Ariza saqlanadi",
+        "s5.s4.d": "database.js bookings jadvaliga pending holatda yangi qator yozadi va xona turi hamda akkauntga bog‘laydi.",
+        "s5.s5.t": "Chat avtomatik ochiladi",
+        "s5.s5.d": "getOrCreateSupportChat yangi suhbat yaratadi, salomlashish xabarini yozadi va admin bildirishnomasini oshiradi.",
+        "s5.s6.t": "UI va Admin yangilanadi",
+        "s5.s6.d": "Chat sessiyasi localStorage ga saqlanadi, xona statistikasi yangilanadi va ariza Admin ERP da ko‘rinadi.",
+
+        "s6.eyebrow": "MA’LUMOTLAR MODELI",
+        "s6.title": "19 ta SQLite jadvali butun yotoqxonani ushlab turadi",
+        "s6.lead": "Asosiy bron, yashovchi, xona va support chat jadvallari o‘zaro bog‘langan; qolgan jadvallar CMS, sessiya va auditni boshqaradi.",
+        "s6.more": "Yana 14 ta operatsion va CMS jadvali:",
+
+        "s7.eyebrow": "API SHARTNOMASI",
+        "s7.title": "75 ta endpoint, barcha joyda bir xil qoidalar",
+        "s7.lead": "Har bir yo‘l /api bilan boshlanadi va tartibli JSON qaytaradi. Xuddi shu shartnoma Express 5 va Java 21 da ham ishlaydi.",
+        "s7.th1": "Bo‘lim",
+        "s7.th2": "Yo‘llar",
+        "s7.th3": "Kim chaqira oladi",
+        "s7.w1": "Hamma / Kirganlar",
+        "s7.w2": "Hamma",
+        "s7.w3": "Talabalar",
+        "s7.w4": "Faqat admin",
+        "s7.rulesTitle": "Hamma joyda bir xil qoidalar",
+        "s7.r1": "Base64 rasm yuklash uchun 15 MB gacha JSON so‘rovlar qo‘llab-quvvatlanadi.",
+        "s7.r2": "Parollar 64-baytli tuzlangan scrypt bilan xeshlanadi va timingSafeEqual bilan tekshiriladi.",
+        "s7.r3": "HttpOnly, SameSite=Lax cookie 7 kun amal qiladi va avtomatik uzaytiriladi.",
+        "s7.r4": "Barcha /api/admin/* yo‘llar requireAdmin tekshiruvidan o‘tadi (401/403).",
+        "s7.r5": "Musbat butun son validatori noto‘g‘ri :id, :chatId va :msgId larni rad etadi.",
+        "s7.r6": "Adminning har bir qo‘shish, tahrirlash va o‘chirishi admin_activity_logs ga yoziladi.",
+        "s7.r7": "Global xato ushlagich SQLite cheklovlari va noto‘g‘ri JSON ni toza kodlarga o‘giradi.",
+
+        "s8.eyebrow": "BRAUZER ILOVASI",
+        "s8.title": "React ilovasining ichki tuzilmasi",
+        "s8.leftTitle": "8 ta ko‘rinish va 12 ta ERP bo‘limi",
+        "s8.g1": "Ochiq sahifalar (hash router)",
+        "s8.g2": "Admin ERP (#admin · 12 modul)",
+        "s8.g3": "Interaktiv modallar",
+        "s8.c1.t": "Rolga asoslangan himoya",
+        "s8.c1.d": "#admin ochilganda avval /api/auth/me tekshiriladi. Kirmagan foydalanuvchi login modaliga yo‘naltiriladi.",
+        "s8.c2.t": "Yagona sinxronizatsiya yordamchisi",
+        "s8.c2.d": "AdminPanelView barcha amallarni runAdminRequest orqali bajaradi: 401 ni ushlaydi, toast ko‘rsatadi va ma’lumotni yangilaydi.",
+        "s8.c3.t": "Jonli qavat xaritasi va KPI",
+        "s8.c3.d": "DashboardFloorMap 2–4-qavat xonalarini guruhlaydi, bandlik foizi, kutilgan/tushgan tushum va qarzdorlarni hisoblaydi.",
+        "s8.c4.t": "Doimiy chat va tezkor bron",
+        "s8.c4.d": "Suzuvchi tugmalar istalgan sahifadan Support Chat (localStorage da saqlanadi) yoki bron oynasini bir bosishda ochadi.",
+
+        "s9.eyebrow": "YETKAZIB BERISH VA ISHGA TUSHIRISH",
+        "s9.title": "Lokal ishlab chiqishdan ikki-runtime ishga tushirishgacha",
+        "s9.d1.t": "Dev runner",
+        "s9.d1.d": "npm run dev backend/index.js (--watch) va Vite serverlarini (5173, 5174) bir vaqtda ishga tushiradi.",
+        "s9.d2.t": "Vite build",
+        "s9.d2.d": "npm run build React 18, Lucide ikonkalar, GSAP va stillarni dist/ papkasiga yig‘adi.",
+        "s9.d3.t": "Avto-migratsiya",
+        "s9.d3.d": "initDatabase() WAL rejimni yoqadi, 19 jadvalni yaratadi, ustunlarni yangilaydi va boshlang‘ich ma’lumot kiritadi.",
+        "s9.d4.t": "Ikki runtime",
+        "s9.d4.d": "SPA + API ni Node (npm start) yoki Java 21 virtual threadlar orqali 4173-portda ishga tushirish mumkin.",
+        "s9.d5.t": "Jonli boshqaruv",
+        "s9.d5.d": "Adminlar kontentni tahrirlaydi, rasmlarni public/ va dist/ ga yuklaydi hamda DB Studio da jadvallarni tekshiradi.",
+        "s9.sub": "Server ishga tushganda ichkarida nimalar bo‘ladi",
+        "s9.p1": "SQLite WAL ochish",
+        "s9.p2": "19 jadval yaratish",
+        "s9.p3": "ALTER migratsiya",
+        "s9.p4": "Seed xona va CMS",
+        "s9.p5": "AdminTPU yaratish",
+        "s9.p6": "/api + dist/ ulash",
+        "s9.callout": "Node o‘rniga JVM kerakmi? ./backend-java/run-java.sh ni ishga tushiring — Java 21 backend aynan 4173-portda ochiladi.",
+
+        "s10.eyebrow": "XAVFSIZLIK QATLAMLARI",
+        "s10.title": "Ma’lumotlar qayerda saqlanadi va ularni nima himoyalaydi",
+        "s10.c1.t": "SQLite WAL + kutish taymeri",
+        "s10.c1.d": "auth.sqlite Write-Ahead Logging va 5 soniyalik busy_timeout bilan ishlaydi — bir vaqtda o‘qish va yozishda bloklanmaydi.",
+        "s10.c2.t": "scrypt + AES-256-GCM",
+        "s10.c2.d": "Parollar 64-baytli tuzlangan scrypt bilan xeshlanib timingSafeEqual orqali tekshiriladi; maxfiy maydonlar AES-256-GCM da.",
+        "s10.c3.t": "Bazaga saqlanuvchi 7 kunlik sessiya",
+        "s10.c3.d": "Tokenlar server qayta yoqilsa ham sessions jadvalida saqlanadi va faqat HttpOnly, SameSite=Lax cookie da yuradi.",
+        "s10.c4.t": "Qat’iy Admin RBAC",
+        "s10.c4.d": "Har bir /api/admin/* so‘rov faol sessiya hamda role === 'admin' va verified === 1 ekanini tekshiradi.",
+        "s10.c5.t": "To‘liq Audit Jurnali",
+        "s10.c5.d": "Har bir qo‘shish, tahrirlash, o‘chirish va klient bilan bog‘lanish admin_activity_logs jadvaliga yozib boriladi.",
+        "s10.c6.t": "Kirish va xato himoyalari",
+        "s10.c6.d": "Musbat ID tekshiruvi, 15 MB limit, ruxsat etilgan rasm formatlari va unhandledRejection himoyasi barqarorlik beradi.",
+
+        "s11.eyebrow": "QANDAY QURILDI",
+        "s11.title": "Iterativ full-stack sikl — har bir modul alohida",
+        "s11.leftHead": "Arxitektura tamoyillari",
+        "s11.c1.t": "Aniq modul chegaralari",
+        "s11.c1.d": "Talaba frontendi, 12 bo‘limli Admin ERP, Dashboard vidjetlari va Backend API lar alohida papkalarda.",
+        "s11.c2.t": "Avtomatik sxema yangilanishi",
+        "s11.c2.d": "Har bir yangi funksiya ishga tushishda xavfsiz CREATE/ALTER tekshiruvlari va seed ma’lumotlarni qo‘shadi.",
+        "s11.c3.t": "Ikki backend tengligi",
+        "s11.c3.d": "Express 5 (Node.js) va Java 21 HttpServer bir xil marshrutlar, cookielar va ma’lumotlar modelini takrorlaydi.",
+        "s11.foot": "Har bir modul to‘liq yetkaziladi: SQLite jadval → API CRUD → Admin ERP bo‘limi → Ochiq UI sinxronizatsiyasi.",
+        "s11.center1": "Bitta modul = sxema +",
+        "s11.center2": "API + ERP + UI",
+        "s11.center3": "Yangi talab bormi? 1-qadamdan",
+        "s11.center4": "toza boshlanadi.",
+        "s11.n1": "1 · Modul rejasi",
+        "s11.s1": "Texnik talab",
+        "s11.n2": "2 · SQLite sxema",
+        "s11.n3": "3 · Express yo‘l",
+        "s11.n4": "4 · Java 21 tenglik",
+        "s11.n5": "5 · Admin ERP UI",
+        "s11.n6": "6 · Ochiq sahifa",
+        "s11.n7": "7 · Audit va seed",
+        "s11.s7": "Jurnal + default",
+        "s11.n8": "8 · Build va reliz",
+
+        "s12.eyebrow": "LOYIHA YO‘LI",
+        "s12.title": "Yetti bosqich: 3D landingdan v1.0.0 ERP gacha",
+        "s12.p0": "3D Tour va Landing UI",
+        "s12.p1": "Modullarga bo‘lish va ERP",
+        "s12.p2": "Xona rasmi va narxlar",
+        "s12.p3": "Bosh sahifa va FAQ CMS",
+        "s12.p4": "Support Chat va Java 21",
+        "s12.p5": "Dinamik Galereya va Matnlar",
+        "s12.p6": "Audit Jurnali va DB Studio",
+        "s12.st1": "REST API endpoint: 5 auth, 11 ochiq va talaba portali, 59 admin ERP",
+        "s12.st2": "SQLite jadvali: WAL rejimi, avto-migratsiya va boshlang‘ich ma’lumotlar",
+        "s12.st3": "manba fayllar: React 18 UI, Express 5 va Java 21 backendlar bo‘ylab",
+        "s12.st4": "Admin ERP bo‘limi: qavat xaritasidan chat va jonli SQLite DB studiogacha",
+        "s12.foot": "Yagona kod bazasi: talabalar portali, real-vaqt chat, to‘liq yotoqxona ERP va ikki (Node.js / Java 21) runtime."
+      }
+    };
+
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const stage = document.getElementById("stage");
+    const counter = document.getElementById("counter");
+    const overview = document.getElementById("overview");
+    const overviewGrid = document.getElementById("overview-grid");
+    const btnEn = document.getElementById("btn-en");
+    const btnUz = document.getElementById("btn-uz");
+
+    // Capture English defaults once
+    const enDefaults = {};
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      enDefaults[el.dataset.i18n] = el.textContent;
+    });
+    document.querySelectorAll("[data-i18n-svg]").forEach((el) => {
+      enDefaults[el.dataset.i18nSvg] = el.textContent;
+    });
+
+    let currentIndex = 0;
+    let currentLang = "en";
+
+    function applyLang(lang) {
+      currentLang = lang;
+      btnEn.classList.toggle("active-lang", lang === "en");
+      btnUz.classList.toggle("active-lang", lang === "uz");
+      document.documentElement.lang = lang;
+
+      const dict = lang === "uz" ? translations.uz : enDefaults;
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.dataset.i18n;
+        if (dict[key] !== undefined) el.textContent = dict[key];
+      });
+      document.querySelectorAll("[data-i18n-svg]").forEach((el) => {
+        const key = el.dataset.i18nSvg;
+        if (dict[key] !== undefined) el.textContent = dict[key];
+      });
+      buildOverview();
+    }
+
+    function showSlide(idx) {
+      currentIndex = Math.max(0, Math.min(slides.length - 1, idx));
+      slides.forEach((s, i) => s.classList.toggle("active", i === currentIndex));
+      counter.textContent = `${currentIndex + 1} / ${slides.length}`;
+      buildOverview();
+    }
+
+    function scaleStage() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const clean = document.body.classList.contains("clean-mode");
+      const pad = clean ? 0 : 28;
+      const scale = Math.min((vw - pad) / 1600, (vh - pad) / 900);
+      stage.style.transform = `scale(${scale})`;
+    }
+
+    function buildOverview() {
+      overviewGrid.innerHTML = "";
+      slides.forEach((slide, idx) => {
+        const eyebrow = slide.querySelector(".eyebrow")?.textContent || `Slide ${idx + 1}`;
+        const title = slide.querySelector("h1, h2")?.textContent || "";
+        const item = document.createElement("div");
+        item.className = `overview-item ${idx === currentIndex ? "current" : ""}`;
+        item.innerHTML = `
+          <div class="overview-num">${String(idx + 1).padStart(2, "0")} · ${eyebrow}</div>
+          <div class="overview-title">${title}</div>
+          <div class="overview-sub">Click to jump</div>
+        `;
+        item.addEventListener("click", () => {
+          showSlide(idx);
+          overview.classList.remove("open");
+        });
+        overviewGrid.appendChild(item);
+      });
+    }
+
+    // URL parameters (?slide=3&clean=1&lang=uz)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("clean") === "1") {
+      document.body.classList.add("clean-mode");
+    }
+    if (params.get("lang") === "uz") {
+      applyLang("uz");
+    }
+    const startSlide = parseInt(params.get("slide") || "1", 10);
+    if (!Number.isNaN(startSlide) && startSlide >= 1 && startSlide <= slides.length) {
+      showSlide(startSlide - 1);
+    } else {
+      showSlide(0);
+    }
+
+    scaleStage();
+    window.addEventListener("resize", scaleStage);
+
+    document.getElementById("btn-prev").addEventListener("click", () => showSlide(currentIndex - 1));
+    document.getElementById("btn-next").addEventListener("click", () => showSlide(currentIndex + 1));
+    btnEn.addEventListener("click", () => applyLang("en"));
+    btnUz.addEventListener("click", () => applyLang("uz"));
+    document.getElementById("btn-grid").addEventListener("click", () => overview.classList.toggle("open"));
+    document.getElementById("overview-close").addEventListener("click", () => overview.classList.remove("open"));
+    document.getElementById("btn-print").addEventListener("click", () => window.print());
+    document.getElementById("btn-fs").addEventListener("click", () => {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        overview.classList.remove("open");
+        return;
+      }
+      if (overview.classList.contains("open")) return;
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") {
+        e.preventDefault();
+        showSlide(currentIndex + 1);
+      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault();
+        showSlide(currentIndex - 1);
+      } else if (e.key === "Home") {
+        showSlide(0);
+      } else if (e.key === "End") {
+        showSlide(slides.length - 1);
+      } else if (e.key.toLowerCase() === "g") {
+        overview.classList.toggle("open");
+      } else if (e.key.toLowerCase() === "f") {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+        else document.exitFullscreen?.();
+      }
+    });
+  </script>
+</body>
+</html>
